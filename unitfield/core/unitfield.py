@@ -400,6 +400,23 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
         
         return cached_get_value
     
+    def _extract_single_result(self, result: np.ndarray) -> Tuple[float, float]:
+        """
+        Extract single coordinate result from cv2 output.
+        
+        Args:
+            result: Output from cv2_unit_field_sample
+            
+        Returns:
+            Tuple of coordinate values
+        """
+        # cv2 returns shape (1, 1, C) for single query with C channels
+        # We need to extract the single coordinate result
+        if result.ndim == 3:
+            return tuple(result[0, 0])
+        else:
+            return tuple(result[0])
+    
     def _get_value_uncached(self, coords: Coordinate) -> Tuple[float, float]:
         """
         Get single coordinate value without caching.
@@ -420,12 +437,7 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
             coords_array,
             self.interp_method
         )
-        # cv2 returns shape (1, 1, C) for single query with C channels
-        # We need to extract the single coordinate result
-        if result.ndim == 3:
-            return tuple(result[0, 0])
-        else:
-            return tuple(result[0])
+        return self._extract_single_result(result)
     
     def get_value(self, coords: Coordinate) -> Tuple[float, float]:
         """
@@ -447,12 +459,7 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
             coords_array,
             self.interp_method
         )
-        # cv2 returns shape (1, 1, C) for single query with C channels
-        # We need to extract the single coordinate result
-        if result.ndim == 3:
-            return tuple(result[0, 0])
-        else:
-            return tuple(result[0])
+        return self._extract_single_result(result)
     
     def get_values(self, coords_array: np.ndarray) -> np.ndarray:
         """
