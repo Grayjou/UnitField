@@ -1,3 +1,4 @@
+# UnitField\unitfield\core\unitfield.py
 """
 Main unit field transformation classes.
 """
@@ -18,30 +19,6 @@ from .types import (
 from ..interpolation import (
     np_interp_dict, cv2_interp_dict, cv2_unit_field_sample
 )
-
-
-def validate_coordinates(
-    expected_dim: int
-) -> Callable[[Callable], Callable]:
-    """
-    Decorator to validate coordinate dimensions.
-    
-    Args:
-        expected_dim: Expected number of dimensions
-    
-    Returns:
-        Decorated function
-    """
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(self, coords: Coordinate, *args, **kwargs):
-            if len(coords) != expected_dim:
-                raise ValueError(
-                    f"Expected {expected_dim} coordinates, got {len(coords)}."
-                )
-            return func(self, coords, *args, **kwargs)
-        return wrapper
-    return decorator
 
 
 def remap_tensor_cv2(
@@ -171,6 +148,9 @@ class MappedUnitField(UnitNdimField):
         if not isinstance(data, np.ndarray):
             raise TypeError(f"Data must be numpy array, got {type(data)}")
         
+        if data.size == 0:
+            raise ValueError("Data array must not be empty")
+        
         if data.ndim < 1:
             raise ValueError("Data must have at least 1 dimension")
         
@@ -186,13 +166,7 @@ class MappedUnitField(UnitNdimField):
         self._interp_method = interp_method
         self._ndim = data.shape[-1]
         self._spatial_shape = data.shape[:-1]
-        
-        # Setup caching
         self._cache_size = cache_size
-        if cache_size:
-            self.get_value = lru_cache(maxsize=cache_size)(self._get_value_uncached)
-        else:
-            self.get_value = self._get_value_uncached
         
         # Validate interpolation method
         if interp_method not in np_interp_dict:
@@ -226,17 +200,23 @@ class MappedUnitField(UnitNdimField):
         """Get the cache size for single coordinate queries."""
         return self._cache_size
     
-    @validate_coordinates(expected_dim=lambda self: len(self.spatial_shape))
-    def _get_value_uncached(self, coords: Coordinate) -> Tuple[float, ...]:
+    def get_value(self, coords: Coordinate) -> Tuple[float, ...]:
         """
-        Uncached version of get_value for internal use.
+        Map unit-space coordinates to unit-space vectors.
         
         Args:
             coords: Unit-space coordinates tuple
             
         Returns:
-            Tuple of unit-space values
+            Unit-space vector at the given coordinates
         """
+        # Validate coordinate dimensions
+        expected_dim = len(self.spatial_shape)
+        if len(coords) != expected_dim:
+            raise ValueError(
+                f"Expected {expected_dim} coordinates, got {len(coords)}."
+            )
+        
         # Convert to numpy array
         coords_array = np.array(coords, dtype=DEFAULT_DTYPE).reshape(1, -1)
         
@@ -328,10 +308,10 @@ class UnitMappedEndomorphism(MappedUnitField):
                 f"Expected last dimension size {len(self.spatial_shape)}, "
                 f"got {self.ndim}."
             )
-    def get_value(self, coords: Coordinate) -> UnitSpaceVector:
-        """Get single coordinate value."""
-        return super().get_value(coords)
-    
+
+
+# UnitField\unitfield\core\unitfield.py
+
 class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
     """
     2D unit field endomorphism with optimized OpenCV backend.
@@ -354,25 +334,44 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
         interp_method: InterpMethod = InterpMethod.NEAREST_MANHATTAN,
         cache_size: Optional[int] = DEFAULT_CACHE_SIZE
     ):
+        # First validate 2D specific properties
+        if len(data.shape) != 3 or data.shape[-1] != 2:
+            raise ValueError(
+                f"Data shape {data.shape} does not represent a 2D endomorphism. "
+                f"Expected shape (H, W, 2), got {data.shape}"
+            )
+        
         super().__init__(data, interp_method, cache_size)
         
-        # Validate 2D specific properties
+        # Double-check after parent initialization
         if self.ndim != 2 or len(self.spatial_shape) != 2:
             raise ValueError(
                 f"Data shape {data.shape} does not represent a 2D endomorphism. "
                 f"Expected shape (H, W, 2), got {data.shape}"
             )
         
-        # Override get_value to use OpenCV for single coordinates
-        if cache_size:
-            self.get_value = lru_cache(maxsize=cache_size)(self._get_value_cv2)
+        # Set up caching
+        self._cache_size = cache_size
+        if cache_size and cache_size > 0:
+            self.get_value = self._create_cached_get_value()
         else:
-            self.get_value = self._get_value_cv2
+            # No caching
+            pass
     
-    @validate_coordinates(expected_dim=2)
-    def _get_value_cv2(self, coords: Coordinate) -> Tuple[float, float]:
+    def _create_cached_get_value(self):
+        """Create a cached version of get_value."""
+        from functools import lru_cache
+        
+        @lru_cache(maxsize=self._cache_size)
+        def cached_get_value(coords: Tuple[float, float]) -> Tuple[float, float]:
+            """Cached version of get_value."""
+            return self._get_value_uncached(coords)
+        
+        return cached_get_value
+    
+    def _get_value_uncached(self, coords: Coordinate) -> Tuple[float, float]:
         """
-        Get single coordinate value using OpenCV backend.
+        Get single coordinate value without caching.
         
         Args:
             coords: Unit-space coordinates (x, y)
@@ -380,6 +379,32 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
         Returns:
             Unit-space vector (x', y')
         """
+        # Manual validation
+        if len(coords) != 2:
+            raise ValueError(f"Expected 2 coordinates, got {len(coords)}")
+        
+        coords_array = np.array(coords, dtype=DEFAULT_DTYPE).reshape(1, 2)
+        result = cv2_unit_field_sample(
+            self.data,
+            coords_array,
+            self.interp_method
+        )
+        return tuple(result[0])
+    
+    def get_value(self, coords: Coordinate) -> Tuple[float, float]:
+        """
+        Get single coordinate value.
+        
+        Args:
+            coords: Unit-space coordinates (x, y)
+            
+        Returns:
+            Unit-space vector (x', y')
+        """
+        # Manual validation
+        if len(coords) != 2:
+            raise ValueError(f"Expected 2 coordinates, got {len(coords)}")
+        
         coords_array = np.array(coords, dtype=DEFAULT_DTYPE).reshape(1, 2)
         result = cv2_unit_field_sample(
             self.data,
