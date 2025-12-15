@@ -9,8 +9,8 @@ from itertools import product
 
 import numpy as np
 
-from ..enums import InterpMethod
-from ..types import DEFAULT_DTYPE
+from ..core.enums import InterpMethod
+from ..core.types import DEFAULT_DTYPE
 
 
 def _scale_coords(coords: np.ndarray, spatial_shape: Tuple[int, ...]) -> np.ndarray:

@@ -9,7 +9,7 @@ from typing import Dict, Optional, Tuple
 import cv2
 import numpy as np
 
-from ..enums import InterpMethod
+from ..core.enums import InterpMethod
 
 
 # OpenCV interpolation method mapping

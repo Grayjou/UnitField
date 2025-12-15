@@ -15,7 +15,7 @@ from .types import (
     UnitArray, UnitSpaceVector, Coordinate, 
     ImageShape, DEFAULT_CACHE_SIZE, DEFAULT_DTYPE
 )
-from .interpolation import (
+from ..interpolation import (
     np_interp_dict, cv2_interp_dict, cv2_unit_field_sample
 )
 

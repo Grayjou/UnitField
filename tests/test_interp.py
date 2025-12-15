@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from unitfield.core.types import *
 from unitfield.core.enums import InterpMethod
-from unitfield.core.interpolation.interp_np import (
+from unitfield.interpolation.interp_np import (
     get_numpy_interpolator,
     _scale_coords,
     _safe_indexing,
@@ -22,7 +22,7 @@ from unitfield.core.interpolation.interp_np import (
     lanczos4_vectorized_arr,
     np_interp_dict
 )
-from unitfield.core.interpolation.interp_cv2 import (
+from unitfield.interpolation.interp_cv2 import (
     cv2_unit_field_sample,
     _scale_to_pixel_space,
     _CV2_INTERP_MAP
@@ -682,7 +682,7 @@ class TestPerformance:
         coords = np.random.rand(1000, 2)
         
         # Clear any existing caches
-        from unitfield.core.interpolation.interp_np import _get_kernel_weights
+        from unitfield.interpolation.interp_np import _get_kernel_weights
         _get_kernel_weights.cache_clear()
         
         def run_multiple():
