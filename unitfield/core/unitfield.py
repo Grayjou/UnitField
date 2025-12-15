@@ -45,6 +45,13 @@ def remap_tensor_cv2(
     Raises:
         ValueError: If data dimensions are invalid or mapping shape mismatch
         RuntimeError: If OpenCV remap fails
+    
+    Note:
+        Mapping coordinates containing inf or NaN are NOT supported and will
+        produce undefined behavior. This is intentional - the function is
+        designed for normalized coordinate spaces where such values are not
+        expected. Validate coordinates externally if they may contain special
+        values.
     """
     # Input validation
     if data.ndim < 2:
@@ -79,7 +86,18 @@ def remap_tensor_cv2(
 
 
 class UnitNdimField(ABC):
-    """Abstract base class for N-dimensional unit fields."""
+    """
+    Abstract base class for N-dimensional unit fields.
+    
+    Unit fields map coordinates in unit space [0, 1]^N to vectors in unit space.
+    Concrete implementations provide interpolation and efficient querying.
+    
+    Note:
+        All coordinate inputs are expected to be in the range [0, 1]. Coordinates
+        containing inf or NaN are NOT supported and will produce undefined behavior.
+        This design choice avoids unnecessary overhead for the common case of
+        normalized coordinate spaces.
+    """
     
     @abstractmethod
     def get_value(self, coords: Coordinate) -> UnitSpaceVector:
@@ -205,10 +223,16 @@ class MappedUnitField(UnitNdimField):
         Map unit-space coordinates to unit-space vectors.
         
         Args:
-            coords: Unit-space coordinates tuple
+            coords: Unit-space coordinates tuple in range [0, 1]
             
         Returns:
             Unit-space vector at the given coordinates
+        
+        Note:
+            Coordinates containing inf or NaN are NOT supported and will produce
+            undefined behavior. Coordinates outside [0, 1] are clipped to the
+            valid range. This design avoids overhead for the common case of
+            normalized coordinates.
         """
         # Validate coordinate dimensions
         expected_dim = len(self.spatial_shape)
@@ -234,13 +258,20 @@ class MappedUnitField(UnitNdimField):
         Map multiple unit-space coordinates to unit-space vectors.
         
         Args:
-            coords_array: Array of shape (..., N) where N is field dimension
+            coords_array: Array of shape (..., N) where N is field dimension.
+                         Coordinates should be in range [0, 1].
             
         Returns:
             Array of unit-space vectors
             
         Raises:
             ValueError: If coordinate dimensions don't match field dimension
+        
+        Note:
+            Coordinates containing inf or NaN are NOT supported and will produce
+            undefined behavior. Coordinates outside [0, 1] are clipped to the
+            valid range. This design avoids overhead for the common case of
+            normalized coordinates.
         """
         if coords_array.shape[-1] != self.ndim:
             raise ValueError(
