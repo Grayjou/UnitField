@@ -31,6 +31,15 @@ def _scale_coords(coords: np.ndarray, spatial_shape: Tuple[int, ...]) -> np.ndar
     return coords * (spatial_shape_array - 1)
 
 def _ensure_float_array(arr: np.ndarray) -> np.ndarray:
+    """
+    Convert integer arrays to float for interpolation.
+    
+    Args:
+        arr: Input array that may be integer type
+    
+    Returns:
+        Array converted to float64 if it was integer, unchanged otherwise
+    """
     # Convert integer data to float for interpolation
     if np.issubdtype(arr.dtype, np.integer):
         arr = arr.astype(np.float64)
