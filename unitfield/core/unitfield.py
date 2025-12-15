@@ -420,7 +420,12 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
             coords_array,
             self.interp_method
         )
-        return tuple(result[0])
+        # cv2 returns shape (1, 1, C) for single query with C channels
+        # We need to extract the single coordinate result
+        if result.ndim == 3:
+            return tuple(result[0, 0])
+        else:
+            return tuple(result[0])
     
     def get_value(self, coords: Coordinate) -> Tuple[float, float]:
         """
@@ -442,7 +447,12 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
             coords_array,
             self.interp_method
         )
-        return tuple(result[0])
+        # cv2 returns shape (1, 1, C) for single query with C channels
+        # We need to extract the single coordinate result
+        if result.ndim == 3:
+            return tuple(result[0, 0])
+        else:
+            return tuple(result[0])
     
     def get_values(self, coords_array: np.ndarray) -> np.ndarray:
         """
