@@ -137,7 +137,6 @@ class UnitNdimField(ABC):
         """Get the spatial shape of the underlying data."""
         pass
 
-
 class MappedUnitField(UnitNdimField):
     """
     N-dimensional unit field with interpolation.
@@ -155,7 +154,7 @@ class MappedUnitField(UnitNdimField):
         Set to 0 or None to disable caching.
         Default: 128
     """
-    
+   
     def __init__(
         self,
         data: UnitArray,

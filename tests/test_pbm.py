@@ -1,5 +1,5 @@
 from ..unitfield.utilities import positional_basematrix2d, unit_positional_basematrix2d, positional_basematrix_ndim
-from ..unitfield import U2DE
+from ..unitfield import U2DE, upbm_ndim, flat_1d_upbm, flat_1d_pbm
 import numpy as np
 import cv2
 def test_positional_basematrix2d():
@@ -65,3 +65,37 @@ def test_circular_mask():
     assert remapped[l-1, l-1] == False
     assert np.sum(remapped) > 0
     assert np.sum(remapped) < l * l*0.7853 # This number is not suspicious at all :D
+
+def test_upbm_1d():
+    length = 5
+    upbm = upbm_ndim(length)
+    print("upbm shape:", upbm.shape)
+    expected = np.array([[0.0], [0.25], [0.5], [0.75], [1.0]])
+    assert np.allclose(upbm, expected)
+
+def test_upbm_shapes():
+    length = 4
+    upbm_1d = upbm_ndim(length)
+    print("upbm_1d shape:", upbm_1d.shape)
+    assert upbm_1d.shape == (length, 1)
+
+    upbm_2d = upbm_ndim(length, length)
+    print("upbm_2d shape:", upbm_2d.shape)
+    assert upbm_2d.shape == (length, length, 2)
+
+    upbm_3d = upbm_ndim(length, length, length)
+    print("upbm_3d shape:", upbm_3d.shape)
+    assert upbm_3d.shape == (length, length, length, 3)
+
+def test_flat_pbm():
+    length = 6
+    pbm = flat_1d_pbm(length)
+    expected = np.array([0, 1, 2, 3, 4, 5])
+    assert pbm.shape == (length,)
+    assert np.array_equal(pbm, expected)
+def test_flat_upbm():
+    length = 6
+    upbm = flat_1d_upbm(length)
+    expected = np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], dtype=np.float32)
+    assert upbm.shape == (length,)
+    assert np.allclose(upbm, expected)

@@ -42,3 +42,13 @@ def unit_positional_basematrix_ndim(*dimlens) -> np.ndarray:
     return np.stack(grids, axis=-1)
 
 upbm_ndim = unit_positional_basematrix_ndim
+
+#upbm_ndim returns shape (L, 1) when called with one dimension. Let's add a version that returns a flattened array of shape (L,)
+def flat_1d_upbm(length) -> np.ndarray:
+    if length <= 1:
+        return np.zeros(length, dtype=np.float32)
+    else:
+        return np.linspace(0.0, 1.0, length, dtype=np.float32)
+    
+def flat_1d_pbm(length) -> np.ndarray:
+    return np.arange(length, dtype=np.int32)

@@ -140,6 +140,10 @@ Potential future enhancements (not yet implemented):
 - Introduced utilities such as generation of positional basematrices with functions, which include unit normalization as well. 
 - Introduced tests for the utilities. See tests/test_pbm.py
 
+# [0.1.3]
+
+- Introduced a function to generate flat 1D unit positional matrices to the utilities
+
 ## [Unreleased]
 
 No unreleased changes yet.
