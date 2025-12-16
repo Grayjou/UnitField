@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "unitfield"
-version = "0.1.1"
+version = "0.1.2"
 description = "High-performance N-dimensional unit field transformations with interpolation"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -78,7 +78,7 @@ Issues = "https://github.com/Grayjou/UnitField/issues"
 Changelog = "https://github.com/Grayjou/UnitField/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
-packages = ["unitfield", "unitfield.core", "unitfield.interpolation"]
+packages = ["unitfield", "unitfield.core", "unitfield.interpolation", "unitfield.utilities"]
 
 [tool.setuptools.package-data]
 unitfield = ["py.typed"]

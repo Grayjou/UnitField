@@ -129,15 +129,17 @@ Potential future enhancements (not yet implemented):
 
 ---
 
-## [Unreleased]
 
-No unreleased changes yet.
 
 ---
 
 [0.1.0]: https://github.com/Grayjou/UnitField/releases/tag/v0.1.0
 
-# [0.1.1]
+# [0.1.2]
 
 - Introduced utilities such as generation of positional basematrices with functions, which include unit normalization as well. 
 - Introduced tests for the utilities. See tests/test_pbm.py
+
+## [Unreleased]
+
+No unreleased changes yet.
