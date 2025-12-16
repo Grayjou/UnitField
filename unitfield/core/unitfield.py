@@ -556,7 +556,7 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
         
         # Generate pixel-space mapping
         mapping = self.rasterize_mapping(width, height)
-
+        data = data.astype(DEFAULT_DTYPE)
         # Apply remapping
         return remap_tensor_cv2(
             data,

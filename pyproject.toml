@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "unitfield"
-version = "0.1.0"
+version = "0.1.1"
 description = "High-performance N-dimensional unit field transformations with interpolation"
 readme = "README.md"
 requires-python = ">=3.8"
