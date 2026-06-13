@@ -1,7 +1,7 @@
 from ..unitfield.utilities import positional_basematrix2d, unit_positional_basematrix2d, positional_basematrix_ndim
 from ..unitfield import U2DE, upbm_ndim, flat_1d_upbm, flat_1d_pbm
 import numpy as np
-import cv2
+from ..unitfield import BorderConfig, BorderMode
 def test_positional_basematrix2d():
     pbm = positional_basematrix2d(3, 2)
     expected = [[[0, 0], [1, 0], [2, 0]],
@@ -60,7 +60,7 @@ def test_circular_mask():
         return np.stack((x, y), axis=-1)
     mask = circular_mask(upbm, center=(0.5, 0.5), radius=0.5)
     u2de = U2DE(mask)
-    remapped = u2de.remap(base, border_mode=cv2.BORDER_CONSTANT, border_value=False)
+    remapped = u2de.remap(base, border_config=BorderConfig.constant(value=0.0))
     assert remapped[0,0] == False
     assert remapped[l-1, l-1] == False
     assert np.sum(remapped) > 0

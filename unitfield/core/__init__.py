@@ -8,7 +8,6 @@ from .unitfield import (
     MappedUnitField,
     UnitMappedEndomorphism,
     Unit2DMappedEndomorphism,
-    remap_tensor_cv2,
     remap_tensor,
 )
 
@@ -23,6 +22,5 @@ __all__ = [
     'MappedUnitField',
     'UnitMappedEndomorphism',
     'Unit2DMappedEndomorphism',
-    'remap_tensor_cv2',
     'remap_tensor',
 ]

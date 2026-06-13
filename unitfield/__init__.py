@@ -27,7 +27,6 @@ __all__ = [
     'UnitMappedEndomorphism',
     'Unit2DMappedEndomorphism',
     'remap_tensor',
-    'remap_tensor_cv2',
     'clip_abs',
     'ZERO_SIGN',
     'positional_basematrix2d',

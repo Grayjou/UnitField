@@ -8,13 +8,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 import pytest
 import numpy as np
-import cv2
-
 from unitfield.core.enums import InterpMethod
 from unitfield.core.unitfield import (
     MappedUnitField,
     Unit2DMappedEndomorphism,
-    remap_tensor_cv2
 )
 
 

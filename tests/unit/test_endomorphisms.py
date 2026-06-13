@@ -8,7 +8,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 import pytest
 import numpy as np
-import cv2
 from unittest.mock import patch
 
 from unitfield.core.enums import InterpMethod
@@ -104,41 +103,26 @@ class TestUnit2DMappedEndomorphism:
         with pytest.raises(ValueError, match="Expected shape"):
             Unit2DMappedEndomorphism(data=data_wrong_last, interp_method=InterpMethod.LINEAR)
     
-    def test_get_value_uses_cv2(self, valid_endomorphism_data):
-        """Test that get_value uses OpenCV backend."""
+    def test_get_value(self, valid_endomorphism_data):
+        """Test get_value returns correct shape and type."""
         endo = Unit2DMappedEndomorphism(
             data=valid_endomorphism_data,
             interp_method=InterpMethod.LINEAR
         )
-        
-        with patch('unitfield.core.unitfield.cv2_unit_field_sample') as mock_cv2_sample:
-            mock_cv2_sample.return_value = np.array([[0.5, 0.6]])
-            
-            result = endo.get_value((0.5, 0.5))
-            
-            mock_cv2_sample.assert_called_once()
-            assert result == (0.5, 0.6)
+        result = endo.get_value((0.5, 0.5))
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        assert all(isinstance(v, float) for v in result)
     
-    def test_get_values_uses_cv2(self, valid_endomorphism_data):
-        """Test that get_values uses OpenCV backend."""
+    def test_get_values(self, valid_endomorphism_data):
+        """Test get_values returns correct shape."""
         endo = Unit2DMappedEndomorphism(
             data=valid_endomorphism_data,
             interp_method=InterpMethod.LINEAR
         )
-        
         coords = np.array([[0.5, 0.5], [0.6, 0.6]])
-        
-        with patch('unitfield.core.unitfield.cv2_unit_field_sample') as mock_cv2_sample:
-            mock_cv2_sample.return_value = np.array([[0.5, 0.6], [0.7, 0.8]])
-            
-            result = endo.get_values(coords)
-            
-            mock_cv2_sample.assert_called_once_with(
-                endo.data,
-                coords,
-                endo.interp_method
-            )
-            np.testing.assert_array_equal(result, [[0.5, 0.6], [0.7, 0.8]])
+        result = endo.get_values(coords)
+        assert result.shape == (2, 2)
 
 
 class TestRasterizeMapping:
@@ -188,47 +172,21 @@ class TestRemapMethod:
             data=identity_endo_data,
             interp_method=InterpMethod.LINEAR
         )
-        
-        # Create test image
-        test_image = np.random.rand(20, 30, 3).astype(np.float32)
-        
-        with patch.object(endo, 'rasterize_mapping') as mock_rasterize:
-            with patch('unitfield.core.unitfield.remap_tensor_cv2') as mock_remap:
-                mock_rasterize.return_value = np.zeros((20, 30, 2), dtype=np.float32)
-                mock_remap.return_value = np.zeros_like(test_image)
-                
-                result = endo.remap(test_image)
-                
-                mock_rasterize.assert_called_once()
-                mock_remap.assert_called_once()
-                assert result.shape == test_image.shape
+        test_image = np.random.rand(20, 30, 3).astype(np.float64)
+        result = endo.remap(test_image, interpolation=1)
+        assert result.shape == test_image.shape
     
     def test_remap_with_parameters(self, identity_endo_data):
-        """Test remap with custom parameters."""
+        """Test remap with different interpolation modes."""
         endo = Unit2DMappedEndomorphism(
             data=identity_endo_data,
             interp_method=InterpMethod.LINEAR
         )
-        
-        test_image = np.random.rand(20, 30, 3).astype(np.float32)
-        
-        with patch.object(endo, 'rasterize_mapping') as mock_rasterize:
-            with patch('unitfield.core.unitfield.remap_tensor_cv2') as mock_remap:
-                mock_rasterize.return_value = np.zeros((20, 30, 2), dtype=np.float32)
-                mock_remap.return_value = np.zeros_like(test_image)
-                
-                result = endo.remap(
-                    test_image,
-                    interpolation=cv2.INTER_CUBIC,
-                    border_mode=cv2.BORDER_CONSTANT,
-                    border_value=1.0
-                )
-                
-                if mock_remap.called:
-                    call_args, call_kwargs = mock_remap.call_args
-                    assert call_kwargs.get('interpolation') == cv2.INTER_CUBIC
-                    assert call_kwargs.get('border_mode') == cv2.BORDER_CONSTANT
-                    assert call_kwargs.get('border_value') == 1.0
+        test_image = np.random.rand(20, 30, 3).astype(np.float64)
+        r0 = endo.remap(test_image, interpolation=0)
+        r1 = endo.remap(test_image, interpolation=1)
+        assert r0.shape == test_image.shape
+        assert r1.shape == test_image.shape
 
 
 class TestCompose:

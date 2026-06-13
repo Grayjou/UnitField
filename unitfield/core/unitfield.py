@@ -4,13 +4,11 @@ Main unit field transformation classes.
 """
 
 from __future__ import annotations
-import warnings
-from functools import lru_cache, wraps
+from functools import lru_cache
 from typing import Tuple, List, Union, Optional, Dict, Any, Callable
 from abc import ABC, abstractmethod
 
 import numpy as np
-import cv2
 
 from .enums import InterpMethod, BorderMode
 from .border_config import BorderConfig
@@ -19,7 +17,7 @@ from .types import (
     ImageShape, DEFAULT_CACHE_SIZE, DEFAULT_DTYPE
 )
 from ..interpolation import (
-    np_interp_dict, cv2_interp_dict, cv2_unit_field_sample
+    np_interp_dict,
 )
 
 
@@ -68,75 +66,7 @@ def remap_tensor(
     )
 
 
-def remap_tensor_cv2(
-    data: np.ndarray,
-    mapping: np.ndarray,
-    *,
-    interpolation: int = cv2.INTER_LINEAR,
-    border_mode: int = cv2.BORDER_REPLICATE,
-    border_value: float = 0.0
-) -> np.ndarray:
-    """
-    Remap an arbitrary (H, W, J) tensor using a pixel-space mapping.
-    
-    Args:
-        data: Input tensor of shape (H, W, ...)
-        mapping: Pixel-space mapping of shape (H, W, 2)
-        interpolation: OpenCV interpolation method
-        border_mode: OpenCV border mode
-        border_value: Border value for constant border mode
-    
-    Returns:
-        Remapped tensor
-    
-    Raises:
-        ValueError: If data dimensions are invalid or mapping shape mismatch
-        RuntimeError: If OpenCV remap fails
-    
-    Note:
-        Mapping coordinates containing inf or NaN are NOT supported and will
-        produce undefined behavior. This is intentional - the function is
-        designed for normalized coordinate spaces where such values are not
-        expected. Validate coordinates externally if they may contain special
-        values.
-    """
-    warnings.warn(
-        "remap_tensor_cv2 is deprecated. Use remap_tensor() with "
-        "unitfield.BorderConfig instead. "
-        "OpenCV backend will be removed in a future release.",
-        DeprecationWarning, stacklevel=2,
-    )
 
-    # Input validation
-    if data.ndim < 2:
-        raise ValueError("Data must be at least 2-dimensional")
-    
-    if mapping.ndim != 3 or mapping.shape[-1] != 2:
-        raise ValueError(
-            f"Mapping must have shape (H, W, 2). Got {mapping.shape}"
-        )
-    
-    if data.shape[:2] != mapping.shape[:2]:
-        raise ValueError(
-            f"Data shape {data.shape[:2]} and mapping shape {mapping.shape[:2]} "
-            f"must match in spatial dimensions."
-        )
-    
-    # Extract mapping components
-    map_x = mapping[..., 0].astype(np.float32)
-    map_y = mapping[..., 1].astype(np.float32)
-
-    try:
-        return cv2.remap(
-            data,
-            map_x,
-            map_y,
-            interpolation,
-            borderMode=border_mode,
-            borderValue=border_value
-        )
-    except cv2.error as e:
-        raise RuntimeError(f"OpenCV remap failed: {str(e)}") from e
 
 
 class UnitNdimField(ABC):
@@ -434,109 +364,21 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
                 f"Expected shape (H, W, 2), got {data.shape}"
             )
         
-        # Set up caching
+        # Set up caching — wrap the parent's get_value
         self._cache_size = cache_size
         if cache_size and cache_size > 0:
             self.get_value = self._create_cached_get_value()
-        else:
-            # No caching
-            pass
     
     def _create_cached_get_value(self):
-        """Create a cached version of get_value."""
+        """Create a cached version of get_value using the numpy backend."""
         from functools import lru_cache
+        parent_get_value = super(Unit2DMappedEndomorphism, self).get_value
         
         @lru_cache(maxsize=self._cache_size)
         def cached_get_value(coords: Tuple[float, float]) -> Tuple[float, float]:
-            """Cached version of get_value."""
-            return self._get_value_uncached(coords)
+            return parent_get_value(coords)
         
         return cached_get_value
-    
-    def _extract_single_result(self, result: np.ndarray) -> Tuple[float, float]:
-        """
-        Extract single coordinate result from cv2 output.
-        
-        Args:
-            result: Output from cv2_unit_field_sample
-            
-        Returns:
-            Tuple of coordinate values
-        """
-        # cv2 returns shape (1, 1, C) for single query with C channels
-        # We need to extract the single coordinate result
-        if result.ndim == 3:
-            return tuple(result[0, 0])
-        else:
-            return tuple(result[0])
-    
-    def _get_value_uncached(self, coords: Coordinate) -> Tuple[float, float]:
-        """
-        Get single coordinate value without caching.
-        
-        Args:
-            coords: Unit-space coordinates (x, y)
-            
-        Returns:
-            Unit-space vector (x', y')
-        """
-        # Manual validation
-        if len(coords) != 2:
-            raise ValueError(f"Expected 2 coordinates, got {len(coords)}")
-        
-        coords_array = np.array(coords, dtype=DEFAULT_DTYPE).reshape(1, 2)
-        result = cv2_unit_field_sample(
-            self.data,
-            coords_array,
-            self.interp_method
-        )
-        return self._extract_single_result(result)
-    
-    def get_value(self, coords: Coordinate) -> Tuple[float, float]:
-        """
-        Get single coordinate value.
-        
-        Args:
-            coords: Unit-space coordinates (x, y)
-            
-        Returns:
-            Unit-space vector (x', y')
-        """
-        # Manual validation
-        if len(coords) != 2:
-            raise ValueError(f"Expected 2 coordinates, got {len(coords)}")
-        
-        coords_array = np.array(coords, dtype=DEFAULT_DTYPE).reshape(1, 2)
-        result = cv2_unit_field_sample(
-            self.data,
-            coords_array,
-            self.interp_method
-        )
-        return self._extract_single_result(result)
-    
-    def get_values(self, coords_array: np.ndarray) -> np.ndarray:
-        """
-        Get multiple coordinate values using OpenCV backend.
-        
-        Args:
-            coords_array: Array of shape (..., 2)
-            
-        Returns:
-            Array of unit-space vectors
-            
-        Raises:
-            ValueError: If coordinates are not 2D
-        """
-        if coords_array.shape[-1] != 2:
-            raise ValueError(
-                f"Expected 2D coordinates, got {coords_array.shape[-1]}D"
-            )
-        
-        return cv2_unit_field_sample(
-            self.data,
-            coords_array,
-            self.interp_method
-        )
     
     def rasterize_mapping(
         self,
@@ -588,35 +430,35 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
         self,
         data: np.ndarray,
         *,
-        interpolation: int = cv2.INTER_LINEAR,
-        border_mode: int = cv2.BORDER_REPLICATE,
-        border_value: float = 0.0
+        interpolation: Union[int, InterpMethod] = 1,
+        border_config: Optional[BorderConfig] = None,
     ) -> np.ndarray:
         """
         Remap any (H, W, J) array using this unit endomorphism.
-        
+
         Args:
             data: Input array of shape (H, W, ...)
-            interpolation: OpenCV interpolation method
-            border_mode: OpenCV border mode
-            border_value: Border value for constant border mode
-            
+            interpolation: Interpolation mode (0=nearest, 1=bilinear, ...)
+            border_config: BorderConfig instance (or None for clamp default)
+
         Returns:
             Remapped array
         """
-
         height, width = data.shape[:2]
-        
-        # Generate pixel-space mapping
-        mapping = self.rasterize_mapping(width, height)
-        data = data.astype(DEFAULT_DTYPE)
-        # Apply remapping
-        return remap_tensor_cv2(
-            data,
-            mapping,
+        # Generate unit-space mapping grid
+        ys, xs = np.meshgrid(
+            np.linspace(0, 1, height), np.linspace(0, 1, width), indexing='ij'
+        )
+        unit_grid = np.stack([xs, ys], axis=-1)
+        # Evaluate the field to get the warped coordinate maps
+        warped = self.get_values(unit_grid)
+        map_x = warped[..., 0]
+        map_y = warped[..., 1]
+
+        return remap_tensor(
+            data, map_x, map_y,
             interpolation=interpolation,
-            border_mode=border_mode,
-            border_value=border_value
+            border_config=border_config,
         )
     
     def compose(
