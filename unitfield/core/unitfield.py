@@ -4,6 +4,7 @@ Main unit field transformation classes.
 """
 
 from __future__ import annotations
+import warnings
 from functools import lru_cache, wraps
 from typing import Tuple, List, Union, Optional, Dict, Any, Callable
 from abc import ABC, abstractmethod
@@ -11,7 +12,8 @@ from abc import ABC, abstractmethod
 import numpy as np
 import cv2
 
-from .enums import InterpMethod
+from .enums import InterpMethod, BorderMode
+from .border_config import BorderConfig
 from .types import (
     UnitArray, UnitSpaceVector, Coordinate, 
     ImageShape, DEFAULT_CACHE_SIZE, DEFAULT_DTYPE
@@ -19,6 +21,51 @@ from .types import (
 from ..interpolation import (
     np_interp_dict, cv2_interp_dict, cv2_unit_field_sample
 )
+
+
+def remap_tensor(
+    src: np.ndarray,
+    map_x: np.ndarray,
+    map_y: np.ndarray,
+    *,
+    interpolation: Union[int, InterpMethod] = 1,
+    border_config: Optional[BorderConfig] = None,
+    num_threads: int = -1,
+) -> np.ndarray:
+    """Remap an image using unit-space coordinates via the Cython kernel.
+
+    Args:
+        src: Input array, shape (H, W) or (H, W, C).
+        map_x: X-coordinate map, shape (H, W), values in [0, 1].
+        map_y: Y-coordinate map, shape (H, W), values in [0, 1].
+        interpolation: Interpolation mode.
+            int: 0=nearest, 1=bilinear, 2=cubic, 3=lanczos3, 4=lanczos4.
+            InterpMethod enum also accepted.
+        border_config: BorderConfig instance (or None for clamp default).
+        num_threads: Thread count (-1 = auto).
+
+    Returns:
+        Remapped array, same shape and dtype as src.
+    """
+    from ..cython._remap_kernel import remap_tensor as _remap_core
+
+    # Cython wrapper expects int; convert InterpMethod enum if needed
+    if isinstance(interpolation, InterpMethod):
+        _ID_MAP = {
+            InterpMethod.NEAREST_MANHATTAN: 0,
+            InterpMethod.NEAREST_EUCLIDEAN: 0,
+            InterpMethod.LINEAR: 1,
+            InterpMethod.CUBIC: 2,
+            InterpMethod.LANCZOS4: 4,
+        }
+        interpolation = _ID_MAP.get(interpolation, 1)
+
+    return _remap_core(
+        src, map_x, map_y,
+        interpolation=interpolation,
+        border_config=border_config,
+        num_threads=num_threads,
+    )
 
 
 def remap_tensor_cv2(
@@ -53,6 +100,13 @@ def remap_tensor_cv2(
         expected. Validate coordinates externally if they may contain special
         values.
     """
+    warnings.warn(
+        "remap_tensor_cv2 is deprecated. Use remap_tensor() with "
+        "unitfield.BorderConfig instead. "
+        "OpenCV backend will be removed in a future release.",
+        DeprecationWarning, stacklevel=2,
+    )
+
     # Input validation
     if data.ndim < 2:
         raise ValueError("Data must be at least 2-dimensional")

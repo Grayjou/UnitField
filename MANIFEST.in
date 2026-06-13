@@ -1,0 +1,5 @@
+recursive-include unitfield *.pyx *.pxd *.h *.c
+include pyproject.toml
+include LICENSE
+prune tests
+prune docs

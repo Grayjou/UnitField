@@ -1,4 +1,10 @@
 from .core import *
+from .cython._zero_sign import ZERO_SIGN
+
+try:
+    from .cython._clip_abs import clip_abs
+except ImportError:
+    from .cython._clip_abs_fallback import clip_abs
 from .utilities import positional_basematrix2d, unit_positional_basematrix2d, positional_basematrix_ndim, unit_positional_basematrix_ndim
 from .utilities import pbm_2d, upbm_2d, pbm_ndim, upbm_ndim, flat_1d_upbm, flat_1d_pbm
 Unit2DEndo = Unit2DMappedEndomorphism
@@ -12,13 +18,18 @@ MUnitField = MappedUnitField
 __version__ = "0.1.3"
 __all__ = [
     'InterpMethod',
+    'BorderMode',
+    'BorderConfig',
     'UnitArray',
     'UnitSpaceVector',
     'UnitNdimField',
     'MappedUnitField',
     'UnitMappedEndomorphism',
     'Unit2DMappedEndomorphism',
+    'remap_tensor',
     'remap_tensor_cv2',
+    'clip_abs',
+    'ZERO_SIGN',
     'positional_basematrix2d',
     'unit_positional_basematrix2d',
     'positional_basematrix_ndim',

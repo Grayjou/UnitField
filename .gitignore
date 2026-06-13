@@ -5,6 +5,10 @@ __pycache__/
 
 # C extensions
 *.so
+*.pyd
+
+# Generated C files from Cython
+unitfield/**/*.c
 
 # Distribution / packaging
 .Python
@@ -205,3 +209,4 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+_notes  
