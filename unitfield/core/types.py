@@ -6,7 +6,7 @@ Type definitions for unit field transformations.
 from typing import Annotated, Final, TypeAlias
 
 import numpy as np
-from boundednumbers import UnitFloat  # type: ignore[attr-defined]
+from boundednumbers import UnitFloat
 from numpy.typing import NDArray
 
 # Unit array type (values in [0, 1])

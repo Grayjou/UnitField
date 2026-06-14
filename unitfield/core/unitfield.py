@@ -339,7 +339,7 @@ class MappedUnitField(UnitNdimField):
 
         self._data = data
         self._interp_method = interp_method
-        self._ndim = data.shape[-1]
+        self._ndim: int = data.shape[-1]
         self._spatial_shape = data.shape[:-1]
         self._cache_size = cache_size
 
