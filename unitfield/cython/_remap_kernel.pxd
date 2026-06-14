@@ -13,6 +13,7 @@ cdef void _remap_kernel_impl(
     const double[:, :, ::1] border_array,
     double feather_w,
     double fx, double fy,
+    const double[::1] feather_d,
     int interp_mode,
     Py_ssize_t H, Py_ssize_t W, Py_ssize_t C,
 ) noexcept nogil

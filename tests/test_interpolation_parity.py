@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import cv2
 
-from unitfield import remap_tensor, InterpMethod
+from unitfield import remap_tensor, remap_tensor_1d, InterpMethod
 
 
 # ---------------------------------------------------------------------------
@@ -226,3 +226,102 @@ class TestLanczos3Basic:
         r3 = remap_tensor(src, xs_w, ys_w, interpolation=3)
         r4 = remap_tensor(src, xs_w, ys_w, interpolation=4)
         assert not np.allclose(r3, r4, atol=1e-10, rtol=0)
+
+
+# ---------------------------------------------------------------------------
+# 1D interpolation parity: Cython kernel vs numpy reference
+# ---------------------------------------------------------------------------
+
+def _ref_interp_1d(src, map_x, kernel_func, radius):
+    """Reference 1D interpolation with given kernel."""
+    N = len(src)
+    xf = map_x * (N - 1)
+    x0 = np.floor(xf).astype(np.intp) - (radius - 1)
+
+    total = np.zeros_like(map_x, dtype=np.float64)
+    norm = np.zeros_like(map_x, dtype=np.float64)
+
+    for i in range(2 * radius):
+        wx = kernel_func(xf - (x0 + i))
+        sx = np.clip(x0 + i, 0, N - 1)
+        total += src[sx] * wx
+        norm += wx
+
+    return np.where(norm > 0, total / norm, 0.0)
+
+
+def _warped_1d_map(N, shift=0.3):
+    """Non-identity 1-D map: slightly shifted to sample between samples."""
+    m = np.linspace(0, 1, N) + shift / (N - 1)
+    return np.clip(m, 0, 1)
+
+
+class Test1DParityNearestLinear:
+    """1D nearest/linear vs numpy reference."""
+
+    @pytest.fixture(params=['sine', 'ramp', 'random'])
+    def src(self, request):
+        N = 50
+        if request.param == 'sine':
+            return np.sin(np.linspace(0, 4*np.pi, N)).astype(np.float64)
+        elif request.param == 'ramp':
+            return np.linspace(0, 1, N).astype(np.float64)
+        else:
+            return np.random.rand(N).astype(np.float64)
+
+    @pytest.fixture
+    def map_x(self, src):
+        return _warped_1d_map(len(src), shift=0.3)
+
+    def test_nearest(self, src, map_x):
+        ours = remap_tensor_1d(src, map_x, interpolation=0)
+        # nearest reference
+        N = len(src)
+        ix = np.round(map_x * (N - 1)).astype(np.intp)
+        np.clip(ix, 0, N - 1, out=ix)
+        expected = src[ix]
+        np.testing.assert_allclose(ours, expected, atol=1e-14)
+
+    def test_linear(self, src, map_x):
+        ours = remap_tensor_1d(src, map_x, interpolation=1)
+        # linear reference
+        N = len(src)
+        xf = map_x * (N - 1)
+        x0 = np.floor(xf).astype(np.intp)
+        dx = xf - x0
+        x1 = np.clip(x0 + 1, 0, N - 1)
+        expected = src[x0] + (src[x1] - src[x0]) * dx
+        np.testing.assert_allclose(ours, expected, atol=1e-14)
+
+
+class Test1DParityCubicLanczos:
+    """1D cubic/lanczos vs numpy reference."""
+
+    @pytest.fixture(params=['sine', 'ramp', 'random'])
+    def src(self, request):
+        N = 50
+        if request.param == 'sine':
+            return np.sin(np.linspace(0, 4*np.pi, N)).astype(np.float64)
+        elif request.param == 'ramp':
+            return np.linspace(0, 1, N).astype(np.float64)
+        else:
+            return np.random.rand(N).astype(np.float64)
+
+    @pytest.fixture
+    def map_x(self, src):
+        return _warped_1d_map(len(src), shift=0.3)
+
+    def test_cubic(self, src, map_x):
+        ours = remap_tensor_1d(src, map_x, interpolation=2)
+        expected = _ref_interp_1d(src, map_x, _catmull_rom_kernel, 2)
+        np.testing.assert_allclose(ours, expected, atol=1e-12)
+
+    def test_lanczos3(self, src, map_x):
+        ours = remap_tensor_1d(src, map_x, interpolation=3)
+        expected = _ref_interp_1d(src, map_x, lambda t: _lanczos_kernel(t, 3), 3)
+        np.testing.assert_allclose(ours, expected, atol=1e-12)
+
+    def test_lanczos4(self, src, map_x):
+        ours = remap_tensor_1d(src, map_x, interpolation=4)
+        expected = _ref_interp_1d(src, map_x, lambda t: _lanczos_kernel(t, 4), 4)
+        np.testing.assert_allclose(ours, expected, atol=1e-12)

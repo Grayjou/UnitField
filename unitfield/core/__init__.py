@@ -8,7 +8,9 @@ from .unitfield import (
     MappedUnitField,
     UnitMappedEndomorphism,
     Unit2DMappedEndomorphism,
+    Unit1DMappedEndomorphism,
     remap_tensor,
+    remap_tensor_1d,
 )
 
 __version__ = "1.0.0"
@@ -22,5 +24,7 @@ __all__ = [
     'MappedUnitField',
     'UnitMappedEndomorphism',
     'Unit2DMappedEndomorphism',
+    'Unit1DMappedEndomorphism',
     'remap_tensor',
+    'remap_tensor_1d',
 ]

@@ -208,41 +208,48 @@ cdef void _remap_kernel_impl(
     const double[:, :, ::1] border_array,
     double feather_w,
     double fx, double fy,
+    const double[::1] feather_d,
     int interp_mode,
     Py_ssize_t H, Py_ssize_t W, Py_ssize_t C,
 ) noexcept nogil:
+    """Main 2-D remap kernel loop.
+
+    border_mode: 0=CLAMP, 1=CONSTANT, 2=REFLECT, 3=WRAP, 4=REFLECT_101, 5=ARRAY
+    feather_d: per-channel feather width array (empty = scalar fallback).
+    """
     cdef Py_ssize_t h, w, ch
-    cdef double u_x, u_y, blend, val, border_val
-    cdef bint use_border
+    cdef double u_x, u_y, extra, val, blend, border_val, fw
+    cdef bint oob
+    cdef bint use_feather_d = feather_d.shape[0] > 0
 
     for h in prange(H, nogil=True, schedule='static'):
         for w in range(W):
             u_x = map_x[h, w]
             u_y = map_y[h, w]
 
-            _apply_border(&u_x, &u_y, &blend, &use_border,
-                          border_mode, feather_w, fx, fy)
+            # OOB feather distance; explicit extra=0.0 for OpenMP privatisation
+            extra = 0.0
+            oob = _apply_border(&u_x, &u_y, &extra, border_mode, fx, fy)
 
-            if use_border:
-                if border_mode == 1:  # CONSTANT
-                    for ch in range(C):
-                        dst[h, w, ch] = border_const
-                elif border_mode == 5:  # ARRAY
-                    for ch in range(C):
-                        dst[h, w, ch] = border_array[h, w, ch]
-            else:
+            if oob and (border_mode == 1 or border_mode == 5):
                 for ch in range(C):
                     val = _sample_1ch(src, u_x, u_y, ch, H, W, interp_mode)
-                    if blend > 0.0:
+                    fw = feather_d[ch] if use_feather_d else feather_w
+                    if fw <= 0.0 or extra >= fw:
+                        if border_mode == 1:
+                            dst[h, w, ch] = border_const
+                        else:
+                            dst[h, w, ch] = border_array[h, w, ch]
+                    else:
+                        blend = extra / fw
                         if border_mode == 1:
                             border_val = border_const
-                        elif border_mode == 5:
-                            border_val = border_array[h, w, ch]
                         else:
-                            border_val = 0.0
+                            border_val = border_array[h, w, ch]
                         dst[h, w, ch] = val + blend * (border_val - val)
-                    else:
-                        dst[h, w, ch] = val
+            else:
+                for ch in range(C):
+                    dst[h, w, ch] = _sample_1ch(src, u_x, u_y, ch, H, W, interp_mode)
 
 
 # ---------------------------------------------------------------------------
@@ -298,16 +305,14 @@ def remap_tensor(
         raise ValueError("src must have non-zero spatial dimensions")
 
     from ._zero_sign import ZERO_SIGN as _ZS  # noqa: avoid unused import issue
-    from ..core.border_config import BorderConfig
+    from ..core.border_config import BorderConfig, compute_feather_d
     from ..core.enums import BorderMode
 
     bc: BorderConfig
     if border_config is None:
         bc = BorderConfig.clamp()
-    elif isinstance(border_config, BorderConfig):
-        bc = border_config
     else:
-        bc = BorderConfig.from_dict(border_config)
+        bc = border_config
 
     # Validate ARRAY mode shape
     if bc.mode == BorderMode.ARRAY:
@@ -317,6 +322,17 @@ def remap_tensor(
             raise ValueError(
                 f"border_array shape {bc.array.shape[:2]} must match "
                 f"src shape {src.shape[:2]}"
+            )
+        C_src = 1 if src.ndim == 2 else src.shape[2]
+        arr_ndim = bc.array.ndim
+        if arr_ndim not in (2, 3):
+            raise ValueError(
+                f"border_array must be 2-D or 3-D, got {arr_ndim}-D"
+            )
+        if arr_ndim == 3 and bc.array.shape[2] != C_src:
+            raise ValueError(
+                f"border_array channels {bc.array.shape[2]} must match "
+                f"src channels {C_src}"
             )
 
     src_contig = np.ascontiguousarray(src, dtype=np.float64)
@@ -334,16 +350,24 @@ def remap_tensor(
     if bc.mode == BorderMode.ARRAY and bc.array is not None:
         border_array = np.ascontiguousarray(bc.array, dtype=np.float64)
 
+    feather_d = compute_feather_d(bc, C)
+
     nthreads = num_threads if num_threads > 0 else _detect_cpu_count()
 
+    border_const = bc.constant_value
+    if isinstance(border_const, np.ndarray):
+        border_const = float(border_const) if border_const.ndim == 0 else 0.0
+    elif border_const is None:
+        border_const = 0.0
     _remap_kernel_impl(
         src_contig, my, mx, dst,
         bc.mode.value,
-        float(bc.constant_value if bc.constant_value is not None else 0.0),
+        border_const,
         border_array,
         bc.feathering_width,
         bc.feathering_x_multiplier,
         bc.feathering_y_multiplier,
+        feather_d,
         interpolation,
         H, W, C,
     )

@@ -58,15 +58,181 @@ def remap_tensor(
         }
         interpolation = _ID_MAP.get(interpolation, 1)
 
+    # Normalize border_config in Python (Cython isinstance can be unreliable)
+    if border_config is not None and isinstance(border_config, BorderConfig):
+        bc = border_config
+    elif border_config is not None:
+        bc = BorderConfig.from_dict(border_config)
+    else:
+        bc = None
+
+    # Handle array-valued constant_value: convert to ARRAY mode
+    if bc is not None and bc.mode == BorderMode.CONSTANT and isinstance(bc.constant_value, np.ndarray):
+        bc = _convert_constant_value_to_array(bc, src)
+
     return _remap_core(
         src, map_x, map_y,
         interpolation=interpolation,
-        border_config=border_config,
+        border_config=bc,
         num_threads=num_threads,
     )
 
 
+def remap_tensor_1d(
+    src: np.ndarray,
+    map_x: np.ndarray,
+    *,
+    interpolation: Union[int, InterpMethod] = 1,
+    border_config: Optional[BorderConfig] = None,
+    num_threads: int = -1,
+) -> np.ndarray:
+    """Remap a 1-D signal using unit-space coordinates via the Cython kernel.
 
+    Args:
+        src: Input array, shape (N,) or (N, C).
+        map_x: Coordinate map, shape (N,), values in [0, 1].
+        interpolation: Interpolation mode.
+            int: 0=nearest, 1=linear, 2=cubic, 3=lanczos3, 4=lanczos4.
+            InterpMethod enum also accepted.
+        border_config: BorderConfig instance (or None for clamp default).
+        num_threads: Thread count (-1 = auto).
+
+    Returns:
+        Remapped array, same shape and dtype as src.
+    """
+    from ..cython._remap_kernel_1d import remap_tensor_1d as _remap_1d_core
+
+    if isinstance(interpolation, InterpMethod):
+        _ID_MAP = {
+            InterpMethod.NEAREST_MANHATTAN: 0,
+            InterpMethod.NEAREST_EUCLIDEAN: 0,
+            InterpMethod.LINEAR: 1,
+            InterpMethod.CUBIC: 2,
+            InterpMethod.LANCZOS4: 4,
+        }
+        interpolation = _ID_MAP.get(interpolation, 1)
+
+    if border_config is not None and isinstance(border_config, BorderConfig):
+        bc = border_config
+    elif border_config is not None:
+        bc = BorderConfig.from_dict(border_config)
+    else:
+        bc = None
+
+    if bc is not None and bc.mode == BorderMode.CONSTANT and isinstance(bc.constant_value, np.ndarray):
+        bc = _convert_constant_value_to_array_1d(bc, src)
+
+    return _remap_1d_core(
+        src, map_x,
+        interpolation=interpolation,
+        border_config=bc,
+        num_threads=num_threads,
+    )
+
+
+def _convert_constant_value_to_array(
+    bc: BorderConfig, src: np.ndarray,
+) -> BorderConfig:
+    """Convert array-valued constant_value to ARRAY mode border_config."""
+    arr = bc.constant_value
+    H, W = src.shape[0], src.shape[1]
+    C = 1 if src.ndim == 2 else src.shape[2]
+
+    if arr.ndim == 0:
+        return bc.with_(constant_value=float(arr))
+    if arr.ndim == 1:
+        if arr.shape[0] != C:
+            raise ValueError(
+                f"constant_value 1-D length {arr.shape[0]} doesn't match "
+                f"src channels {C}"
+            )
+        border_arr = np.broadcast_to(
+            arr.reshape(1, 1, C), (H, W, C)
+        ).copy(order='C')
+        return BorderConfig(
+            mode=BorderMode.ARRAY, array=border_arr,
+            feathering_width=bc.feathering_width,
+            feathering_x_multiplier=bc.feathering_x_multiplier,
+            feathering_y_multiplier=bc.feathering_y_multiplier,
+        )
+    if arr.ndim == 2:
+        if arr.shape != (H, W):
+            raise ValueError(
+                f"constant_value 2-D shape {arr.shape} doesn't match "
+                f"src shape ({H}, {W})"
+            )
+        border_arr = np.broadcast_to(
+            arr.reshape(H, W, 1), (H, W, C)
+        ).copy(order='C')
+        return BorderConfig(
+            mode=BorderMode.ARRAY, array=border_arr,
+            feathering_width=bc.feathering_width,
+            feathering_x_multiplier=bc.feathering_x_multiplier,
+            feathering_y_multiplier=bc.feathering_y_multiplier,
+        )
+    if arr.ndim == 3:
+        if arr.shape != (H, W, C):
+            raise ValueError(
+                f"constant_value 3-D shape {arr.shape} doesn't match "
+                f"src shape ({H}, {W}, {C})"
+            )
+        if arr.dtype != np.float64:
+            arr = arr.astype(np.float64)
+        border_arr = np.ascontiguousarray(arr)
+        return BorderConfig(
+            mode=BorderMode.ARRAY, array=border_arr,
+            feathering_width=bc.feathering_width,
+            feathering_x_multiplier=bc.feathering_x_multiplier,
+            feathering_y_multiplier=bc.feathering_y_multiplier,
+        )
+    raise ValueError(
+        f"constant_value must be 0-D, 1-D, 2-D, or 3-D, got {arr.ndim}-D"
+    )
+
+
+def _convert_constant_value_to_array_1d(
+    bc: BorderConfig, src: np.ndarray,
+) -> BorderConfig:
+    """Convert array-valued constant_value to ARRAY mode (1-D variant)."""
+    arr = bc.constant_value
+    N = src.shape[0]
+    C = 1 if src.ndim == 1 else src.shape[1]
+
+    if arr.ndim == 0:
+        return bc.with_(constant_value=float(arr))
+    if arr.ndim == 1:
+        if arr.shape[0] != C:
+            raise ValueError(
+                f"constant_value 1-D length {arr.shape[0]} doesn't match "
+                f"src channels {C}"
+            )
+        border_arr = np.broadcast_to(
+            arr.reshape(1, C), (N, C)
+        ).copy(order='C')
+        return BorderConfig(
+            mode=BorderMode.ARRAY, array=border_arr,
+            feathering_width=bc.feathering_width,
+            feathering_x_multiplier=bc.feathering_x_multiplier,
+            feathering_y_multiplier=bc.feathering_y_multiplier,
+        )
+    if arr.ndim == 2:
+        if arr.shape != (N, C):
+            raise ValueError(
+                f"constant_value 2-D shape {arr.shape} doesn't match "
+                f"src shape ({N}, {C})"
+            )
+        if arr.dtype != np.float64:
+            arr = arr.astype(np.float64)
+        border_arr = np.ascontiguousarray(arr)
+        return BorderConfig(
+            mode=BorderMode.ARRAY, array=border_arr,
+            feathering_width=bc.feathering_width,
+            feathering_x_multiplier=bc.feathering_x_multiplier,
+            feathering_y_multiplier=bc.feathering_y_multiplier,
+        )
+    raise ValueError(
+        f"constant_value must be 0-D, 1-D, or 2-D, got {arr.ndim}-D"
+    )
 
 
 class UnitNdimField(ABC):
@@ -446,11 +612,14 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
         """
         height, width = data.shape[:2]
         # Generate unit-space mapping grid
+        # Generate unit-space mapping grid in (y, x) order
+        # (the numpy backend expects spatial dims first)
         ys, xs = np.meshgrid(
             np.linspace(0, 1, height), np.linspace(0, 1, width), indexing='ij'
         )
-        unit_grid = np.stack([xs, ys], axis=-1)
+        unit_grid = np.stack([ys, xs], axis=-1)
         # Evaluate the field to get the warped coordinate maps
+        # get_values returns (x, y) since data stores (x, y)
         warped = self.get_values(unit_grid)
         map_x = warped[..., 0]
         map_y = warped[..., 1]
@@ -460,7 +629,7 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
             interpolation=interpolation,
             border_config=border_config,
         )
-    
+
     def compose(
         self,
         other: 'Unit2DMappedEndomorphism',
@@ -484,21 +653,100 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
         if interp_method is None:
             interp_method = self.interp_method
         
-        # Sample other field at this field's coordinates
+        # Sample other field at this field's coordinates in (y, x) order
         height, width = self.spatial_shape
-        xs, ys = np.meshgrid(
-            np.linspace(0, 1, width, dtype=DEFAULT_DTYPE),
+        ys, xs = np.meshgrid(
             np.linspace(0, 1, height, dtype=DEFAULT_DTYPE),
-            indexing='xy'
+            np.linspace(0, 1, width, dtype=DEFAULT_DTYPE),
+            indexing='ij'
         )
-        coords = np.stack([xs, ys], axis=-1)
+        coords = np.stack([ys, xs], axis=-1)
         
         # Apply self then other
-        mapped_by_self = self.get_values(coords)
-        mapped_by_both = other.get_values(mapped_by_self)
+        mapped_by_self = self.get_values(coords)  # returns (x, y)
+        # Swap to (y, x) order for the next get_values call
+        mapped_by_both = other.get_values(mapped_by_self[..., ::-1])
         
         return Unit2DMappedEndomorphism(
             data=mapped_by_both,
             interp_method=interp_method,
             cache_size=self.cache_size
+        )
+
+
+class Unit1DMappedEndomorphism(UnitMappedEndomorphism):
+    """1D unit field endomorphism mapping [0,1] → [0,1].
+
+    Parameters
+    ----------
+    data : UnitArray
+        2-dimensional array of shape (N, 1)
+    interp_method : InterpMethod, optional
+        Interpolation strategy used to sample the field.
+        Default: InterpMethod.LINEAR
+    cache_size : int, optional
+        Size of LRU cache for single coordinate queries.
+        Default: 128
+    """
+
+    def __init__(
+        self,
+        data: UnitArray,
+        interp_method: InterpMethod = InterpMethod.LINEAR,
+        cache_size: Optional[int] = DEFAULT_CACHE_SIZE
+    ):
+        if len(data.shape) != 2 or data.shape[-1] != 1:
+            raise ValueError(
+                f"Data shape {data.shape} does not represent a 1D endomorphism. "
+                f"Expected shape (N, 1), got {data.shape}"
+            )
+
+        super().__init__(data, interp_method, cache_size)
+
+        if self.ndim != 1 or len(self.spatial_shape) != 1:
+            raise ValueError(
+                f"Data shape {data.shape} does not represent a 1D endomorphism. "
+                f"Expected shape (N, 1), got {data.shape}"
+            )
+
+        self._cache_size = cache_size
+        if cache_size and cache_size > 0:
+            self.get_value = self._create_cached_get_value()
+
+    def _create_cached_get_value(self):
+        from functools import lru_cache
+        parent_get_value = super(Unit1DMappedEndomorphism, self).get_value
+
+        @lru_cache(maxsize=self._cache_size)
+        def cached_get_value(coords: Tuple[float, ...]) -> Tuple[float, ...]:
+            return parent_get_value(coords)
+
+        return cached_get_value
+
+    def remap(
+        self,
+        data: np.ndarray,
+        *,
+        interpolation: Union[int, InterpMethod] = 1,
+        border_config: Optional[BorderConfig] = None,
+    ) -> np.ndarray:
+        """Remap any (N,) or (N, C) array using this unit endomorphism.
+
+        Args:
+            data: Input array of shape (N,) or (N, ...)
+            interpolation: Interpolation mode (0=nearest, 1=linear, ...)
+            border_config: BorderConfig instance (or None for clamp default)
+
+        Returns:
+            Remapped array
+        """
+        n = data.shape[0]
+        xs = np.linspace(0, 1, n, dtype=np.float64)
+        warped = self.get_values(xs[:, np.newaxis])
+        map_x = warped[:, 0]
+
+        return remap_tensor_1d(
+            data, map_x,
+            interpolation=interpolation,
+            border_config=border_config,
         )

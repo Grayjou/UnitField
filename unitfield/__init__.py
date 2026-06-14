@@ -11,11 +11,15 @@ Unit2DEndo = Unit2DMappedEndomorphism
 UnitEndo2D = Unit2DMappedEndomorphism
 U2DE = Unit2DMappedEndomorphism
 UEndo2D = Unit2DMappedEndomorphism
+Unit1DEndo = Unit1DMappedEndomorphism
+UnitEndo1D = Unit1DMappedEndomorphism
+U1DE = Unit1DMappedEndomorphism
+UEndo1D = Unit1DMappedEndomorphism
 UNDField = UnitNdimField
 MUnitField = MappedUnitField
 
 
-__version__ = "0.1.3"
+__version__ = "0.2.0"
 __all__ = [
     'InterpMethod',
     'BorderMode',
@@ -26,7 +30,9 @@ __all__ = [
     'MappedUnitField',
     'UnitMappedEndomorphism',
     'Unit2DMappedEndomorphism',
+    'Unit1DMappedEndomorphism',
     'remap_tensor',
+    'remap_tensor_1d',
     'clip_abs',
     'ZERO_SIGN',
     'positional_basematrix2d',

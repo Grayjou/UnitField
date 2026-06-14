@@ -3,3 +3,4 @@ include pyproject.toml
 include LICENSE
 prune tests
 prune docs
+prune examples
