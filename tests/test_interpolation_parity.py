@@ -1,11 +1,10 @@
 """Interpolation parity tests: Cython kernel vs OpenCV/reference implementations."""
 
+import cv2
 import numpy as np
 import pytest
-import cv2
 
-from unitfield import remap_tensor, remap_tensor_1d, InterpMethod
-
+from unitfield import InterpMethod, remap_tensor, remap_tensor_1d
 
 # ---------------------------------------------------------------------------
 # InterpMethod enum acceptance

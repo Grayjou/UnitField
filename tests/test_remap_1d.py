@@ -2,23 +2,22 @@
 Tests for 1D remap kernel and Unit1DMappedEndomorphism.
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-import pytest
 import numpy as np
+import pytest
 
 from unitfield import (
-    remap_tensor_1d,
-    Unit1DMappedEndomorphism,
-    InterpMethod,
+    U1DE,
     BorderConfig,
     BorderMode,
-    U1DE,
-    MappedUnitField,
+    InterpMethod,
+    Unit1DMappedEndomorphism,
+    remap_tensor_1d,
 )
-
 
 # ---------------------------------------------------------------------------
 # remap_tensor_1d

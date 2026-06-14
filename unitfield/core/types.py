@@ -3,27 +3,22 @@
 Type definitions for unit field transformations.
 """
 
-from typing import Annotated, Tuple, List, Union, TypeAlias, Final
-from typing_extensions import TypeAlias as TypeAliasExt
-import numpy as np
-from numpy.typing import NDArray
-from boundednumbers import UnitFloat
+from typing import Annotated, Final, TypeAlias
 
+import numpy as np
+from boundednumbers import UnitFloat
+from numpy.typing import NDArray
 
 # Unit array type (values in [0, 1])
 UnitArray: TypeAlias = Annotated[NDArray[np.floating], "values in [0, 1]"]
 
 # Unit space vector types
-UnitSpaceVector: TypeAlias = Union[
-    UnitArray,
-    Tuple[UnitFloat, ...],
-    List[UnitFloat],
-]
+UnitSpaceVector: TypeAlias = UnitArray | tuple[UnitFloat, ...] | list[UnitFloat]
 
 # Type aliases for clarity
-Coordinate: TypeAlias = Tuple[UnitFloat, ...]
-PixelCoordinate: TypeAlias = Tuple[float, ...]
-ImageShape: TypeAlias = Tuple[int, int]
+Coordinate: TypeAlias = tuple[UnitFloat, ...]
+PixelCoordinate: TypeAlias = tuple[float, ...]
+ImageShape: TypeAlias = tuple[int, int]
 
 # Constants
 MAX_CACHE_SIZE: Final[int] = 1024

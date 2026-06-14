@@ -1,7 +1,13 @@
-from ..unitfield.utilities import positional_basematrix2d, unit_positional_basematrix2d, positional_basematrix_ndim
-from ..unitfield import U2DE, upbm_ndim, flat_1d_upbm, flat_1d_pbm
 import numpy as np
-from ..unitfield import BorderConfig, BorderMode
+
+from ..unitfield import U2DE, BorderConfig, flat_1d_pbm, flat_1d_upbm, upbm_ndim
+from ..unitfield.utilities import (
+    positional_basematrix2d,
+    positional_basematrix_ndim,
+    unit_positional_basematrix2d,
+)
+
+
 def test_positional_basematrix2d():
     pbm = positional_basematrix2d(3, 2)
     expected = [[[0, 0], [1, 0], [2, 0]],
@@ -47,24 +53,24 @@ def test_identity_unit_2d_endomorphism():
     assert np.allclose(transformed, unit_base)
 
 def test_circular_mask():
-    l = 10
-    upbm = unit_positional_basematrix2d(l+1, l+1)
-    base = np.full((l,l), True, dtype=bool)
-    def circular_mask(upbm, center = l//2, radius = 0.5):
+    size = 10
+    upbm = unit_positional_basematrix2d(size + 1, size + 1)
+    base = np.full((size, size), True, dtype=bool)
+    def circular_mask(upbm, center=size // 2, radius=0.5):
         cx, cy = center
         dist = np.sqrt((upbm[...,0] - cx)**2 + (upbm[...,1] - cy)**2)
         mask = dist <= radius
         x, y = upbm[...,0], upbm[...,1]
-        x = np.where(mask, x, -1) # Border value -1
+        x = np.where(mask, x, -1)
         y = np.where(mask, y, -1)
         return np.stack((x, y), axis=-1)
     mask = circular_mask(upbm, center=(0.5, 0.5), radius=0.5)
     u2de = U2DE(mask)
     remapped = u2de.remap(base, border_config=BorderConfig.constant(value=0.0))
-    assert remapped[0,0] == False
-    assert remapped[l-1, l-1] == False
+    assert not remapped[0,0]
+    assert not remapped[size - 1, size - 1]
     assert np.sum(remapped) > 0
-    assert np.sum(remapped) < l * l*0.7853 # This number is not suspicious at all :D
+    assert np.sum(remapped) < size * size * 0.7853
 
 def test_upbm_1d():
     length = 5

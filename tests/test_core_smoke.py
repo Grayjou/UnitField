@@ -1,6 +1,7 @@
 """Smoke tests for UnitField -- do NOT import any compiled Cython extension."""
 
 import numpy as np
+
 import unitfield
 
 
@@ -50,7 +51,7 @@ def test_clip_abs_zero_positive():
 
 def test_clip_abs_zero_negative():
     """clip_abs(0, t) with NEGATIVE sign."""
-    from unitfield import clip_abs, ZERO_SIGN
+    from unitfield import ZERO_SIGN, clip_abs
     result = clip_abs(np.zeros(3, dtype=np.float64), 0.5, ZERO_SIGN.NEGATIVE)
     np.testing.assert_array_equal(result, [-0.5, -0.5, -0.5])
 
@@ -79,7 +80,7 @@ def test_clip_abs_negative_threshold_raises():
     x = np.array([0.5], dtype=np.float64)
     try:
         clip_abs(x, -1.0)
-        assert False, "Should have raised ValueError"
+        raise AssertionError("Should have raised ValueError")
     except ValueError:
         pass
 
@@ -89,7 +90,7 @@ def test_clip_abs_integer_raises():
     from unitfield import clip_abs
     try:
         clip_abs(np.array([1, 2, 3], dtype=np.int32), 1.0)
-        assert False, "Should have raised TypeError"
+        raise AssertionError("Should have raised TypeError")
     except TypeError:
         pass
 

@@ -3,8 +3,7 @@
 import numpy as np
 import pytest
 
-from unitfield import remap_tensor, BorderConfig, BorderMode
-
+from unitfield import BorderConfig, BorderMode, remap_tensor
 
 # ---------------------------------------------------------------------------
 # Fixtures

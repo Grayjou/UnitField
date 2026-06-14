@@ -2,14 +2,14 @@
 Tests for the remap_tensor function (formerly remap_tensor_cv2).
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-import pytest
 import numpy as np
 
-from unitfield import remap_tensor, BorderConfig
+from unitfield import BorderConfig, remap_tensor
 
 
 class TestRemapTensor:

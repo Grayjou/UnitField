@@ -3,25 +3,23 @@
 Interpolation method and border mode enumerations for unit field transformations.
 """
 
-from enum import Enum, IntEnum, unique
-from typing import Dict, Set
-
+from enum import Enum, IntEnum
 
 
 class InterpMethod(Enum):
     """Interpolation methods for unit field sampling."""
-    
+
     NEAREST_MANHATTAN = "nearest"
     LINEAR = "linear"
     NEAREST_EUCLIDEAN = "euclidean"
     LANCZOS4 = "lanczos4"
     CUBIC = "cubic"
-    
+
     # Backward compatibility alias
     EUCLIDEAN = "euclidean"
-    
+
     @classmethod
-    def get_cv2_methods(cls) -> Set['InterpMethod']:
+    def get_cv2_methods(cls) -> set['InterpMethod']:
         """Get interpolation methods supported by OpenCV backend."""
         return {
             cls.NEAREST_MANHATTAN,
@@ -30,9 +28,9 @@ class InterpMethod(Enum):
             cls.CUBIC,
             cls.LANCZOS4
         }
-    
+
     @classmethod
-    def get_numpy_methods(cls) -> Dict['InterpMethod', str]:
+    def get_numpy_methods(cls) -> dict['InterpMethod', str]:
         """Get mapping of interpolation methods to numpy backend names."""
         return {
             cls.NEAREST_MANHATTAN: "nearest_manhattan",

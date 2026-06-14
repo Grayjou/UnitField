@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict, replace
-from typing import Optional, Union, Any
+from dataclasses import asdict, dataclass, replace
+from typing import Any
 
 import numpy as np
 
@@ -32,12 +32,12 @@ class BorderConfig:
     """
 
     mode: BorderMode = BorderMode.CLAMP
-    constant_value: Optional[Union[float, np.ndarray]] = None
-    array: Optional[np.ndarray] = None
+    constant_value: float | np.ndarray | None = None
+    array: np.ndarray | None = None
     feathering_width: float = 0.0
     feathering_x_multiplier: float = 1.0
     feathering_y_multiplier: float = 1.0
-    feather_dims: Optional[Union[list, np.ndarray]] = None
+    feather_dims: list | np.ndarray | None = None
     """Per-channel bool mask of length ``C``.
     ``True`` = channel participates in feather blend; ``False`` = hard
     edge (full border value at OOB).  ``None`` = all channels feather.
@@ -66,7 +66,7 @@ class BorderConfig:
 
     @classmethod
     def constant(
-        cls, value: Union[float, np.ndarray], *,
+        cls, value: float | np.ndarray, *,
         feathering_width: float = 0.0,
         feathering_x_multiplier: float = 1.0,
         feathering_y_multiplier: float = 1.0,
@@ -106,7 +106,7 @@ class BorderConfig:
 
     @classmethod
     def from_dict(
-        cls, data: Union[BorderConfig, dict, None]
+        cls, data: BorderConfig | dict | None
     ) -> BorderConfig:
         """Deserialise from a dict, BorderConfig, or None (returns default)."""
         if data is None:

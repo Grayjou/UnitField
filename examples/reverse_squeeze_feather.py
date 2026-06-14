@@ -8,11 +8,13 @@ Demonstrates:
   - Pillow → numpy → Pillow round-trip
 """
 
-from PIL import Image
-from unitfield import upbm_2d, U2DE, InterpMethod, BorderConfig, BorderMode
-import numpy as np
-
 from pathlib import Path
+
+import numpy as np
+from PIL import Image
+
+from unitfield import U2DE, BorderConfig, BorderMode, InterpMethod, upbm_2d
+
 parent_dir = Path(__file__).parent
 (parent_dir / "output").mkdir(exist_ok=True)
 
@@ -20,7 +22,7 @@ def rgba_circle(size, color_circle, color_bg=(0, 0, 0, 0)):
     """Create a circular RGBA image."""
     img = Image.new("RGBA", size, color_bg)
     draw = ImageDraw.Draw(img)
-    radius = min(size) // 2
+    min(size) // 2
     draw.ellipse((0, 0, size[0], size[1]), fill=color_circle)
     return img
 

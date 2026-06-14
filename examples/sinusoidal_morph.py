@@ -2,11 +2,13 @@
 Sinusoidal morphing example with feathering.
 """
 
-from PIL import Image
-from unitfield import upbm_2d, U2DE, InterpMethod, BorderConfig, BorderMode
-import numpy as np
-
 from pathlib import Path
+
+import numpy as np
+from PIL import Image
+
+from unitfield import U2DE, BorderConfig, BorderMode, InterpMethod, upbm_2d
+
 parent_dir = Path(__file__).parent
 (parent_dir / "output").mkdir(exist_ok=True)
 

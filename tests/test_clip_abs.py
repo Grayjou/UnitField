@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from unitfield import clip_abs, ZERO_SIGN
+from unitfield import ZERO_SIGN, clip_abs
 
 
 class TestClipAbsNumerical:

@@ -12,8 +12,8 @@ import platform
 from pathlib import Path
 
 import numpy as np
-from setuptools import setup, Extension
 from Cython.Build import cythonize
+from setuptools import Extension, setup
 
 # ---------------------------------------------------------------------------
 # Platform-specific compiler flags
@@ -48,9 +48,7 @@ def _should_compile(path: Path) -> bool:
         return False
     if path.name == "__init__.pyx":
         return False
-    if path.stat().st_size == 0:
-        return False
-    return True
+    return path.stat().st_size != 0
 
 
 def discover_pyx_files() -> list[Path]:

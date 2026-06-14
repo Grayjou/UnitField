@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from unitfield.core.enums import BorderMode
 from unitfield.core.border_config import BorderConfig
+from unitfield.core.enums import BorderMode
 
 
 class TestBorderMode:
