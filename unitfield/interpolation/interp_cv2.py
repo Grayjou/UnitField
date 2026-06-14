@@ -3,7 +3,9 @@
 OpenCV-based interpolation backend for 2D unit fields.
 """
 
+from collections.abc import Callable
 from functools import lru_cache, partial
+from typing import Any, cast
 
 import cv2
 import numpy as np
@@ -29,7 +31,7 @@ def _create_cv2_remap_function(
     interpolation: int,
     border_mode: int = _DEFAULT_BORDER_MODE,
     border_value: float = _DEFAULT_BORDER_VALUE
-) -> callable:
+) -> Callable[..., Any]:
     """Create a cached cv2.remap function with specified parameters."""
     return partial(
         cv2.remap,
@@ -122,7 +124,7 @@ def cv2_unit_field_sample(
     remap_fn = _create_cv2_remap_function(cv2_interp, border_mode, border_value)
 
     try:
-        return remap_fn(data, map_x, map_y)
+        return cast(np.ndarray, remap_fn(data, map_x, map_y))
     except cv2.error as e:
         raise RuntimeError(f"OpenCV remap failed: {str(e)}") from e
 

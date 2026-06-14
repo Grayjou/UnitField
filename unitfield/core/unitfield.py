@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from functools import lru_cache
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
@@ -65,7 +66,7 @@ def remap_tensor(
     if border_config is not None and isinstance(border_config, BorderConfig):
         bc = border_config
     elif border_config is not None:
-        bc = BorderConfig.from_dict(border_config)
+        bc = BorderConfig.from_dict(border_config)  # type: ignore[unreachable]
     else:
         bc = None
 
@@ -73,12 +74,12 @@ def remap_tensor(
     if bc is not None and bc.mode == BorderMode.CONSTANT and isinstance(bc.constant_value, np.ndarray):
         bc = _convert_constant_value_to_array(bc, src)
 
-    return _remap_core(
+    return cast(np.ndarray, _remap_core(
         src, map_x, map_y,
         interpolation=interpolation,
         border_config=bc,
         num_threads=num_threads,
-    )
+    ))
 
 
 def remap_tensor_1d(
@@ -118,19 +119,19 @@ def remap_tensor_1d(
     if border_config is not None and isinstance(border_config, BorderConfig):
         bc = border_config
     elif border_config is not None:
-        bc = BorderConfig.from_dict(border_config)
+        bc = BorderConfig.from_dict(border_config)  # type: ignore[unreachable]
     else:
         bc = None
 
     if bc is not None and bc.mode == BorderMode.CONSTANT and isinstance(bc.constant_value, np.ndarray):
         bc = _convert_constant_value_to_array_1d(bc, src)
 
-    return _remap_1d_core(
+    return cast(np.ndarray, _remap_1d_core(
         src, map_x,
         interpolation=interpolation,
         border_config=bc,
         num_threads=num_threads,
-    )
+    ))
 
 
 def _convert_constant_value_to_array(
@@ -138,6 +139,8 @@ def _convert_constant_value_to_array(
 ) -> BorderConfig:
     """Convert array-valued constant_value to ARRAY mode border_config."""
     arr = bc.constant_value
+    if not isinstance(arr, np.ndarray):
+        raise ValueError(f"Expected array-valued constant_value, got {type(arr)}")
     H, W = src.shape[0], src.shape[1]
     C = 1 if src.ndim == 2 else src.shape[2]
 
@@ -198,6 +201,8 @@ def _convert_constant_value_to_array_1d(
 ) -> BorderConfig:
     """Convert array-valued constant_value to ARRAY mode (1-D variant)."""
     arr = bc.constant_value
+    if not isinstance(arr, np.ndarray):
+        raise ValueError(f"Expected array-valued constant_value, got {type(arr)}")
     N = src.shape[0]
     C = 1 if src.ndim == 1 else src.shape[1]
 
@@ -394,7 +399,7 @@ class MappedUnitField(UnitNdimField):
             )
 
         # Convert to numpy array
-        coords_array = np.array(coords, dtype=DEFAULT_DTYPE).reshape(1, -1)
+        coords_array: np.ndarray = np.array(coords, dtype=DEFAULT_DTYPE).reshape(1, -1)
 
         # Get interpolator
         interp_func = np_interp_dict[self._interp_method]
@@ -432,7 +437,7 @@ class MappedUnitField(UnitNdimField):
             )
 
         interp_func = np_interp_dict[self._interp_method]
-        return interp_func(coords_array, self._spatial_shape, self._data)
+        return cast(np.ndarray, interp_func(coords_array, self._spatial_shape, self._data))
 
     def with_interp_method(self, method: InterpMethod) -> MappedUnitField:
         """
@@ -536,7 +541,7 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
         # Set up caching — wrap the parent's get_value
         self._cache_size = cache_size
         if cache_size and cache_size > 0:
-            self.get_value = self._create_cached_get_value()
+            self.get_value = self._create_cached_get_value()  # type: ignore[method-assign]
 
     def _create_cached_get_value(self):
         """Create a cached version of get_value using the numpy backend."""
@@ -544,7 +549,7 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
 
         @lru_cache(maxsize=self._cache_size)
         def cached_get_value(coords: tuple[float, float]) -> tuple[float, float]:
-            return parent_get_value(coords)
+            return cast(tuple[float, float], parent_get_value(coords))
 
         return cached_get_value
 
@@ -713,7 +718,7 @@ class Unit1DMappedEndomorphism(UnitMappedEndomorphism):
 
         self._cache_size = cache_size
         if cache_size and cache_size > 0:
-            self.get_value = self._create_cached_get_value()
+            self.get_value = self._create_cached_get_value()  # type: ignore[method-assign]
 
     def _create_cached_get_value(self):
         parent_get_value = super().get_value

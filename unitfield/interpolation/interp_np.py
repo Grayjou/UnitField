@@ -6,6 +6,7 @@ NumPy-based interpolation backend for N-dimensional unit fields.
 from collections.abc import Callable
 from functools import lru_cache
 from itertools import product
+from typing import cast
 
 import numpy as np
 
@@ -27,8 +28,8 @@ def _scale_coords(coords: np.ndarray, spatial_shape: tuple[int, ...]) -> np.ndar
     coords = np.asarray(coords)
     D = coords.shape[-1]  # number of spatial dimensions
 
-    spatial_shape_array = np.asarray(spatial_shape[:D], dtype=DEFAULT_DTYPE)
-    return coords * (spatial_shape_array - 1)
+    spatial_shape_array: np.ndarray = np.asarray(spatial_shape[:D], dtype=DEFAULT_DTYPE)
+    return cast(np.ndarray, (coords * (spatial_shape_array - 1)).astype(np.float64))
 
 def _ensure_float_array(arr: np.ndarray) -> np.ndarray:
     """
@@ -66,13 +67,13 @@ def _safe_indexing(
     clipped_indices = np.clip(indices, spatial_min, spatial_max)
 
     # Create index tuple for spatial dimensions
-    index_tuple = tuple(clipped_indices[..., i] for i in range(D))
+    index_tuple: tuple = tuple(clipped_indices[..., i] for i in range(D))
 
     # Add slice(None) for all remaining (value) dimensions
     if data.ndim > D:
         index_tuple += (slice(None),) * (data.ndim - D)
 
-    return data[index_tuple]
+    return cast(np.ndarray, data[index_tuple])
 
 @lru_cache(maxsize=5)
 def _get_kernel_weights(

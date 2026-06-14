@@ -113,6 +113,8 @@ class BorderConfig:
             return cls()
         if isinstance(data, cls):
             return data
+        if not isinstance(data, dict):
+            raise TypeError(f"Expected dict, BorderConfig, or None, got {type(data)}")
         return cls(**data)
 
 
