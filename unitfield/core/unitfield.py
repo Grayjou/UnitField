@@ -580,6 +580,8 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
             raise ValueError(f"Height must be positive, got {height}")
 
         # Build unit grid efficiently using broadcasting
+        xs: np.ndarray
+        ys: np.ndarray
         xs, ys = np.meshgrid(
             np.linspace(0, 1, width, dtype=dtype),
             np.linspace(0, 1, height, dtype=dtype),
@@ -597,7 +599,7 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
         if height > 1:
             mapping[..., 1] *= (height - 1)
 
-        return mapping.astype(np.float32)
+        return cast(np.ndarray, mapping.astype(np.float32))
 
     def remap(
         self,
@@ -662,6 +664,8 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
 
         # Sample other field at this field's coordinates in (y, x) order
         height, width = self.spatial_shape
+        ys: np.ndarray
+        xs: np.ndarray
         ys, xs = np.meshgrid(
             np.linspace(0, 1, height, dtype=DEFAULT_DTYPE),
             np.linspace(0, 1, width, dtype=DEFAULT_DTYPE),
