@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from functools import lru_cache
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 import numpy as np
 
