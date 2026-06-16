@@ -13,7 +13,7 @@ from .unitfield import (
     remap_tensor_1d,
 )
 
-__version__ = "1.0.0"
+__version__ = "0.2.2"
 __all__ = [
     'InterpMethod',
     'BorderMode',

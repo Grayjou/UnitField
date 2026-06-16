@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "unitfield"
-version = "0.2.0"
-description = "High-performance N-dimensional unit field transformations with interpolation"
+version = "0.2.2"
+description = "High-performance N-dimensional unit field transformations with Cython-accelerated remapping"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -16,13 +16,15 @@ maintainers = [
     {name = "GrayJou", email = "grayjou@users.noreply.github.com"}
 ]
 keywords = [
-    "interpolation",
-    "transformation",
-    "unit-field",
-    "computer-vision",
     "image-processing",
+    "computer-vision",
+    "coordinate-transformation",
+    "interpolation",
+    "remapping",
+    "cython",
     "numpy",
-    "opencv"
+    "openmp",
+    "unit-field",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -35,42 +37,47 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Cython",
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Image Processing",
     "Topic :: Software Development :: Libraries :: Python Modules",
-    "Typing :: Typed"
+    "Typing :: Typed",
 ]
 
 dependencies = [
     "numpy>=1.20.0",
-    "opencv-python>=4.5.0",
     "boundednumbers>=0.1.0",
-    "typing-extensions>=4.0.0"
+    "typing-extensions>=4.0.0",
 ]
 
 [project.optional-dependencies]
-dev = [
+cv2 = ["opencv-python>=4.5.0"]
+test = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "pytest-benchmark>=4.0.0",
+    "opencv-python>=4.5.0",
+]
+dev = [
+    "unitfield[test]",
     "Cython>=3.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
     "black>=23.0.0",
-    "isort>=5.12.0"
+    "isort>=5.12.0",
 ]
 docs = [
     "sphinx>=5.0.0",
     "sphinx-rtd-theme>=1.2.0",
-    "sphinx-autodoc-typehints>=1.22.0"
+    "sphinx-autodoc-typehints>=1.22.0",
 ]
-test = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "pytest-benchmark>=4.0.0"
+publish = [
+    "build>=1.0.0",
+    "twine>=4.0.0",
+    "tomli>=1.1.0",
+    "keyring>=24.0.0",
 ]
-cv2 = ["opencv-python>=4.5.0"]
 
 [project.urls]
 Homepage = "https://github.com/Grayjou/UnitField"
@@ -78,6 +85,7 @@ Documentation = "https://github.com/Grayjou/UnitField#readme"
 Repository = "https://github.com/Grayjou/UnitField"
 Issues = "https://github.com/Grayjou/UnitField/issues"
 Changelog = "https://github.com/Grayjou/UnitField/blob/main/CHANGELOG.md"
+"Release Notes" = "https://github.com/Grayjou/UnitField/releases"
 
 [tool.setuptools.packages.find]
 include = ["unitfield", "unitfield.*"]
@@ -101,7 +109,7 @@ python_functions = ["test_*"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "benchmark: marks tests as benchmarks",
-    "integration: marks tests as integration tests"
+    "integration: marks tests as integration tests",
 ]
 
 [tool.coverage.run]
@@ -109,7 +117,7 @@ source = ["unitfield"]
 omit = [
     "*/tests/*",
     "*/__pycache__/*",
-    "*/site-packages/*"
+    "*/site-packages/*",
 ]
 
 [tool.coverage.report]
@@ -121,7 +129,7 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
     "class .*\\bProtocol\\):",
-    "@(abc\\.)?abstractmethod"
+    "@(abc\\.)?abstractmethod",
 ]
 
 [tool.mypy]
@@ -180,11 +188,10 @@ known-first-party = ["unitfield"]
 
 [tool.black]
 line-length = 100
-target-version = ["py310", "py311", "py312", "py313"]
+target-version = ["py310", "py311", "py312", "py313", "py314"]
 include = '\.pyi?$'
 extend-exclude = '''
 /(
-  # directories
   \.eggs
   | \.git
   | \.hg

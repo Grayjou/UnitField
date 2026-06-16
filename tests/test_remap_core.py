@@ -229,7 +229,10 @@ class TestFeathering:
         # feather_w=0.4 → blend=1.0 → pure border
         bc = BorderConfig.constant(
             0.0, feathering_width=0.4,
-            feathering_x_multiplier=1.0, feathering_y_multiplier=2.0,
+            feathering_x_undershoot_multiplier=1.0,
+            feathering_x_overshoot_multiplier=1.0,
+            feathering_y_undershoot_multiplier=2.0,
+            feathering_y_overshoot_multiplier=2.0,
         )
         result = remap_tensor(src, xs, ys, interpolation=1, border_config=bc)
         assert result[0, 0, 0] == pytest.approx(0.0, abs=0.01)

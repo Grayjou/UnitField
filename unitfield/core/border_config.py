@@ -27,16 +27,20 @@ class BorderConfig:
             ``None`` means 0.0 downstream.
         array: Optional 2-D / 3-D background array for ARRAY mode.
         feathering_width: Smooth-blend band width at borders (0.0 = hard edge).
-        feathering_x_multiplier: Per-axis asymmetric feather multiplier (x).
-        feathering_y_multiplier: Per-axis asymmetric feather multiplier (y).
+        feathering_x_undershoot_multiplier: Left edge feather multiplier (u_x < 0.0).
+        feathering_x_overshoot_multiplier: Right edge feather multiplier (u_x > 1.0).
+        feathering_y_undershoot_multiplier: Top edge feather multiplier (u_y < 0.0).
+        feathering_y_overshoot_multiplier: Bottom edge feather multiplier (u_y > 1.0).
     """
 
     mode: BorderMode = BorderMode.CLAMP
     constant_value: float | np.ndarray | None = None
     array: np.ndarray | None = None
     feathering_width: float = 0.0
-    feathering_x_multiplier: float = 1.0
-    feathering_y_multiplier: float = 1.0
+    feathering_x_undershoot_multiplier: float = 1.0
+    feathering_x_overshoot_multiplier: float = 1.0
+    feathering_y_undershoot_multiplier: float = 1.0
+    feathering_y_overshoot_multiplier: float = 1.0
     feather_dims: list | np.ndarray | None = None
     """Per-channel bool mask of length ``C``.
     ``True`` = channel participates in feather blend; ``False`` = hard
@@ -47,7 +51,12 @@ class BorderConfig:
     def __post_init__(self) -> None:
         if self.feathering_width < 0.0:
             raise ValueError("feathering_width must be non-negative")
-        if self.feathering_x_multiplier < 0.0 or self.feathering_y_multiplier < 0.0:
+        if any(x < 0.0 for x in [
+            self.feathering_x_undershoot_multiplier,
+            self.feathering_x_overshoot_multiplier,
+            self.feathering_y_undershoot_multiplier,
+            self.feathering_y_overshoot_multiplier,
+        ]):
             raise ValueError("feathering multipliers must be non-negative")
         if self.mode == BorderMode.ARRAY and self.array is None:
             raise ValueError("ARRAY mode requires a non-None array")
@@ -68,32 +77,40 @@ class BorderConfig:
     def constant(
         cls, value: float | np.ndarray, *,
         feathering_width: float = 0.0,
-        feathering_x_multiplier: float = 1.0,
-        feathering_y_multiplier: float = 1.0,
+        feathering_x_undershoot_multiplier: float = 1.0,
+        feathering_x_overshoot_multiplier: float = 1.0,
+        feathering_y_undershoot_multiplier: float = 1.0,
+        feathering_y_overshoot_multiplier: float = 1.0,
     ) -> BorderConfig:
         """CONSTANT mode filled with ``value`` (scalar or per-channel)."""
         return cls(
             mode=BorderMode.CONSTANT,
             constant_value=value,
             feathering_width=feathering_width,
-            feathering_x_multiplier=feathering_x_multiplier,
-            feathering_y_multiplier=feathering_y_multiplier,
+            feathering_x_undershoot_multiplier=feathering_x_undershoot_multiplier,
+            feathering_x_overshoot_multiplier=feathering_x_overshoot_multiplier,
+            feathering_y_undershoot_multiplier=feathering_y_undershoot_multiplier,
+            feathering_y_overshoot_multiplier=feathering_y_overshoot_multiplier,
         )
 
     @classmethod
     def from_array(
         cls, array: np.ndarray, *,
         feathering_width: float = 0.0,
-        feathering_x_multiplier: float = 1.0,
-        feathering_y_multiplier: float = 1.0,
+        feathering_x_undershoot_multiplier: float = 1.0,
+        feathering_x_overshoot_multiplier: float = 1.0,
+        feathering_y_undershoot_multiplier: float = 1.0,
+        feathering_y_overshoot_multiplier: float = 1.0,
     ) -> BorderConfig:
         """ARRAY border (composite-onto) path using ``array`` as background."""
         return cls(
             mode=BorderMode.ARRAY,
             array=array,
             feathering_width=feathering_width,
-            feathering_x_multiplier=feathering_x_multiplier,
-            feathering_y_multiplier=feathering_y_multiplier,
+            feathering_x_undershoot_multiplier=feathering_x_undershoot_multiplier,
+            feathering_x_overshoot_multiplier=feathering_x_overshoot_multiplier,
+            feathering_y_undershoot_multiplier=feathering_y_undershoot_multiplier,
+            feathering_y_overshoot_multiplier=feathering_y_overshoot_multiplier,
         )
 
     def with_(self, **changes: Any) -> BorderConfig:

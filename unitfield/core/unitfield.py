@@ -158,8 +158,10 @@ def _convert_constant_value_to_array(
         return BorderConfig(
             mode=BorderMode.ARRAY, array=border_arr,
             feathering_width=bc.feathering_width,
-            feathering_x_multiplier=bc.feathering_x_multiplier,
-            feathering_y_multiplier=bc.feathering_y_multiplier,
+            feathering_x_undershoot_multiplier=bc.feathering_x_undershoot_multiplier,
+            feathering_x_overshoot_multiplier=bc.feathering_x_overshoot_multiplier,
+            feathering_y_undershoot_multiplier=bc.feathering_y_undershoot_multiplier,
+            feathering_y_overshoot_multiplier=bc.feathering_y_overshoot_multiplier,
         )
     if arr.ndim == 2:
         if arr.shape != (H, W):
@@ -173,8 +175,10 @@ def _convert_constant_value_to_array(
         return BorderConfig(
             mode=BorderMode.ARRAY, array=border_arr,
             feathering_width=bc.feathering_width,
-            feathering_x_multiplier=bc.feathering_x_multiplier,
-            feathering_y_multiplier=bc.feathering_y_multiplier,
+            feathering_x_undershoot_multiplier=bc.feathering_x_undershoot_multiplier,
+            feathering_x_overshoot_multiplier=bc.feathering_x_overshoot_multiplier,
+            feathering_y_undershoot_multiplier=bc.feathering_y_undershoot_multiplier,
+            feathering_y_overshoot_multiplier=bc.feathering_y_overshoot_multiplier,
         )
     if arr.ndim == 3:
         if arr.shape != (H, W, C):
@@ -188,8 +192,10 @@ def _convert_constant_value_to_array(
         return BorderConfig(
             mode=BorderMode.ARRAY, array=border_arr,
             feathering_width=bc.feathering_width,
-            feathering_x_multiplier=bc.feathering_x_multiplier,
-            feathering_y_multiplier=bc.feathering_y_multiplier,
+            feathering_x_undershoot_multiplier=bc.feathering_x_undershoot_multiplier,
+            feathering_x_overshoot_multiplier=bc.feathering_x_overshoot_multiplier,
+            feathering_y_undershoot_multiplier=bc.feathering_y_undershoot_multiplier,
+            feathering_y_overshoot_multiplier=bc.feathering_y_overshoot_multiplier,
         )
     raise ValueError(
         f"constant_value must be 0-D, 1-D, 2-D, or 3-D, got {arr.ndim}-D"
@@ -220,8 +226,10 @@ def _convert_constant_value_to_array_1d(
         return BorderConfig(
             mode=BorderMode.ARRAY, array=border_arr,
             feathering_width=bc.feathering_width,
-            feathering_x_multiplier=bc.feathering_x_multiplier,
-            feathering_y_multiplier=bc.feathering_y_multiplier,
+            feathering_x_undershoot_multiplier=bc.feathering_x_undershoot_multiplier,
+            feathering_x_overshoot_multiplier=bc.feathering_x_overshoot_multiplier,
+            feathering_y_undershoot_multiplier=bc.feathering_y_undershoot_multiplier,
+            feathering_y_overshoot_multiplier=bc.feathering_y_overshoot_multiplier,
         )
     if arr.ndim == 2:
         if arr.shape != (N, C):
@@ -235,8 +243,10 @@ def _convert_constant_value_to_array_1d(
         return BorderConfig(
             mode=BorderMode.ARRAY, array=border_arr,
             feathering_width=bc.feathering_width,
-            feathering_x_multiplier=bc.feathering_x_multiplier,
-            feathering_y_multiplier=bc.feathering_y_multiplier,
+            feathering_x_undershoot_multiplier=bc.feathering_x_undershoot_multiplier,
+            feathering_x_overshoot_multiplier=bc.feathering_x_overshoot_multiplier,
+            feathering_y_undershoot_multiplier=bc.feathering_y_undershoot_multiplier,
+            feathering_y_overshoot_multiplier=bc.feathering_y_overshoot_multiplier,
         )
     raise ValueError(
         f"constant_value must be 0-D, 1-D, or 2-D, got {arr.ndim}-D"

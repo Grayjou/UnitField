@@ -12,14 +12,14 @@ def positional_basematrix2d(width, height = None) -> np.ndarray:
 
 pbm_2d = positional_basematrix2d
 
-def unit_positional_basematrix2d(width, height=None) -> np.ndarray:
+def unit_positional_basematrix2d(width, height=None, *, dtype=np.float32) -> np.ndarray:
     if height is None:
         try:
             width, height = width
         except TypeError:
             height = width
 
-    ys, xs = np.indices((height, width), dtype=np.float32)
+    ys, xs = np.indices((height, width), dtype=dtype)
     if width > 1:
         xs /= (width - 1)
     if height > 1:
@@ -35,8 +35,8 @@ def positional_basematrix_ndim(*dimlens) -> np.ndarray:
 
 pbm_ndim = positional_basematrix_ndim
 
-def unit_positional_basematrix_ndim(*dimlens) -> np.ndarray:
-    grids = np.indices(dimlens, dtype=np.float32)
+def unit_positional_basematrix_ndim(*dimlens, dtype=np.float32) -> np.ndarray:
+    grids = np.indices(dimlens, dtype=dtype)
     for i, length in enumerate(dimlens):
         if length > 1:
             grids[i] /= (length - 1)
@@ -45,11 +45,11 @@ def unit_positional_basematrix_ndim(*dimlens) -> np.ndarray:
 upbm_ndim = unit_positional_basematrix_ndim
 
 #upbm_ndim returns shape (L, 1) when called with one dimension. Let's add a version that returns a flattened array of shape (L,)
-def flat_1d_upbm(length) -> np.ndarray:
+def flat_1d_upbm(length, *, dtype=np.float32) -> np.ndarray:
     if length <= 1:
-        return np.zeros(length, dtype=np.float32)
+        return np.zeros(length, dtype=dtype)
     else:
-        return np.linspace(0.0, 1.0, length, dtype=np.float32)
+        return np.linspace(0.0, 1.0, length, dtype=dtype)
 
 def flat_1d_pbm(length) -> np.ndarray:
     return np.arange(length, dtype=np.int32)

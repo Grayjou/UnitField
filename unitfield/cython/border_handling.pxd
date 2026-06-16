@@ -39,9 +39,33 @@ cdef inline double _extra_1d(double u) noexcept nogil:
     return 0.0
 
 
+cdef inline void _feather_dist_2d(
+    double ux, double uy,
+    double* dx, double* dy,
+    double under_x, double over_x,
+    double under_y, double over_y,
+) noexcept nogil:
+    """Compute per-edge feather distances for x and y axes."""
+    if ux < 0.0:
+        dx[0] = -ux * under_x
+    elif ux > 1.0:
+        dx[0] = (ux - 1.0) * over_x
+    else:
+        dx[0] = 0.0
+
+    if uy < 0.0:
+        dy[0] = -uy * under_y
+    elif uy > 1.0:
+        dy[0] = (uy - 1.0) * over_y
+    else:
+        dy[0] = 0.0
+
+
 cdef inline bint _apply_border(
     double* u_x, double* u_y, double* extra,
-    int border_mode, double fx, double fy,
+    int border_mode,
+    double under_x, double over_x,
+    double under_y, double over_y,
 ) noexcept nogil:
     """Transform coordinates in-place and compute OOB feather distance.
 
@@ -70,9 +94,8 @@ cdef inline bint _apply_border(
         extra[0] = 0.0
 
     elif border_mode == 1:  # CONSTANT
-        dx = _extra_1d(u_x[0])
-        dy = _extra_1d(u_y[0])
-        extra[0] = sqrt(dx * dx * fx * fx + dy * dy * fy * fy)
+        _feather_dist_2d(u_x[0], u_y[0], &dx, &dy, under_x, over_x, under_y, over_y)
+        extra[0] = sqrt(dx * dx + dy * dy)
         if u_x[0] < 0.0:
             u_x[0] = 0.0
         elif u_x[0] > 1.0:
@@ -98,9 +121,8 @@ cdef inline bint _apply_border(
         extra[0] = 0.0
 
     elif border_mode == 5:  # ARRAY
-        dx = _extra_1d(u_x[0])
-        dy = _extra_1d(u_y[0])
-        extra[0] = sqrt(dx * dx * fx * fx + dy * dy * fy * fy)
+        _feather_dist_2d(u_x[0], u_y[0], &dx, &dy, under_x, over_x, under_y, over_y)
+        extra[0] = sqrt(dx * dx + dy * dy)
         if u_x[0] < 0.0:
             u_x[0] = 0.0
         elif u_x[0] > 1.0:

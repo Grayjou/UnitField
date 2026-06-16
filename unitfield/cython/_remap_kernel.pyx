@@ -207,7 +207,8 @@ cdef void _remap_kernel_impl(
     double border_const,
     const double[:, :, ::1] border_array,
     double feather_w,
-    double fx, double fy,
+    double under_x, double over_x,
+    double under_y, double over_y,
     const double[::1] feather_d,
     int interp_mode,
     Py_ssize_t H, Py_ssize_t W, Py_ssize_t C,
@@ -229,7 +230,7 @@ cdef void _remap_kernel_impl(
 
             # OOB feather distance; explicit extra=0.0 for OpenMP privatisation
             extra = 0.0
-            oob = _apply_border(&u_x, &u_y, &extra, border_mode, fx, fy)
+            oob = _apply_border(&u_x, &u_y, &extra, border_mode, under_x, over_x, under_y, over_y)
 
             if oob and (border_mode == 1 or border_mode == 5):
                 for ch in range(C):
@@ -365,8 +366,10 @@ def remap_tensor(
         border_const,
         border_array,
         bc.feathering_width,
-        bc.feathering_x_multiplier,
-        bc.feathering_y_multiplier,
+        bc.feathering_x_undershoot_multiplier,
+        bc.feathering_x_overshoot_multiplier,
+        bc.feathering_y_undershoot_multiplier,
+        bc.feathering_y_overshoot_multiplier,
         feather_d,
         interpolation,
         H, W, C,

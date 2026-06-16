@@ -37,9 +37,21 @@ cdef inline double _extra_1d(double u) noexcept nogil:
     if u > 1.0:  return u - 1.0
     return 0.0
 
+cdef inline double _feather_dist_1d(
+    double u, double under_x, double over_x,
+) noexcept nogil:
+    """1-D per-edge feather distance with multipliers."""
+    if u < 0.0:
+        return -u * under_x
+    elif u > 1.0:
+        return (u - 1.0) * over_x
+    return 0.0
+
+
 cdef inline bint _apply_border_1d(
     double* u, double* extra,
     int border_mode,
+    double under_x, double over_x,
 ) noexcept nogil:
     """1-D border handler.
 
@@ -59,7 +71,7 @@ cdef inline bint _apply_border_1d(
         extra[0] = 0.0
 
     elif border_mode == 1:  # CONSTANT
-        extra[0] = _extra_1d(u[0])
+        extra[0] = _feather_dist_1d(u[0], under_x, over_x)
         if u[0] < 0.0:   u[0] = 0.0
         elif u[0] > 1.0: u[0] = 1.0
 
@@ -73,7 +85,7 @@ cdef inline bint _apply_border_1d(
         u[0] = _ref101(u[0])
         extra[0] = 0.0
     elif border_mode == 5:   # ARRAY
-        extra[0] = _extra_1d(u[0])
+        extra[0] = _feather_dist_1d(u[0], under_x, over_x)
         if u[0] < 0.0:   u[0] = 0.0
         elif u[0] > 1.0: u[0] = 1.0
 
@@ -200,6 +212,7 @@ cdef void _remap_kernel_1d_impl(
     double border_const,
     const double[:, ::1] border_array,
     double feather_w,
+    double under_x, double over_x,
     const double[::1] feather_d,
     int interp_mode,
     Py_ssize_t N, Py_ssize_t C,
@@ -214,7 +227,7 @@ cdef void _remap_kernel_1d_impl(
         u = map_x[n]
 
         extra = 0.0
-        oob = _apply_border_1d(&u, &extra, border_mode)
+        oob = _apply_border_1d(&u, &extra, border_mode, under_x, over_x)
 
         if oob and (border_mode == 1 or border_mode == 5):
             for ch in range(C):
@@ -313,6 +326,8 @@ def remap_tensor_1d(
         border_const,
         border_array,
         bc.feathering_width,
+        bc.feathering_x_undershoot_multiplier,
+        bc.feathering_x_overshoot_multiplier,
         feather_d,
         interpolation,
         N, C,

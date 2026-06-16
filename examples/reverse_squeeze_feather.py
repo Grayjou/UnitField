@@ -55,8 +55,10 @@ def main():
         mode=BorderMode.CONSTANT,
         constant_value=np.array([0.0, 0.0, 0.0, 0.0]),        # black fully transparent background
         feathering_width=0.15,
-        feathering_x_multiplier=1.0,
-        feathering_y_multiplier=0.0,  # only feather along x
+        feathering_x_undershoot_multiplier=1.0,
+        feathering_x_overshoot_multiplier=1.0,
+        feathering_y_undershoot_multiplier=0.0,  # only feather along x
+        feathering_y_overshoot_multiplier=0.0,
         feather_dims=(False, False, False, True),  # only feather alpha channel
     )
     remapped = endo.remap(src, interpolation=1, border_config=bc)
