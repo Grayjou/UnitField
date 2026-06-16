@@ -10,7 +10,7 @@ Border modes: 0=CLAMP, 1=CONSTANT, 2=REFLECT, 3=WRAP, 4=REFLECT_101, 5=ARRAY
 import numpy as np
 cimport numpy as cnp
 from cython.parallel cimport prange
-from libc.math cimport floor, sin, fabs, fmod
+from libc.math cimport floor, sin, fabs, fmod, INFINITY
 
 cnp.import_array()
 
@@ -37,14 +37,21 @@ cdef inline double _extra_1d(double u) noexcept nogil:
     if u > 1.0:  return u - 1.0
     return 0.0
 
+cdef double FEATHER_SENTINEL = -1.0
+
+
 cdef inline double _feather_dist_1d(
     double u, double under_x, double over_x,
 ) noexcept nogil:
-    """1-D per-edge feather distance with multipliers."""
+    """1-D per-edge feather distance with multipliers.
+
+    Returns FEATHER_SENTINEL when the multiplier is negative, signalling
+    the caller to zero the distance (full interior, no feathering).
+    """
     if u < 0.0:
-        return -u * under_x
+        return -u * under_x if under_x >= 0.0 else FEATHER_SENTINEL
     elif u > 1.0:
-        return (u - 1.0) * over_x
+        return (u - 1.0) * over_x if over_x >= 0.0 else FEATHER_SENTINEL
     return 0.0
 
 
@@ -72,6 +79,8 @@ cdef inline bint _apply_border_1d(
 
     elif border_mode == 1:  # CONSTANT
         extra[0] = _feather_dist_1d(u[0], under_x, over_x)
+        if extra[0] == FEATHER_SENTINEL:
+            extra[0] = 0.0
         if u[0] < 0.0:   u[0] = 0.0
         elif u[0] > 1.0: u[0] = 1.0
 
@@ -86,6 +95,8 @@ cdef inline bint _apply_border_1d(
         extra[0] = 0.0
     elif border_mode == 5:   # ARRAY
         extra[0] = _feather_dist_1d(u[0], under_x, over_x)
+        if extra[0] == FEATHER_SENTINEL:
+            extra[0] = 0.0
         if u[0] < 0.0:   u[0] = 0.0
         elif u[0] > 1.0: u[0] = 1.0
 

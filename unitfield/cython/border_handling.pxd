@@ -1,6 +1,6 @@
 """Border-handling inline functions for Cython remap kernel."""
 
-from libc.math cimport fabs, fmod, sqrt
+from libc.math cimport fabs, fmod, sqrt, INFINITY
 
 
 cdef inline double _tri2(double t) noexcept nogil:
@@ -39,24 +39,33 @@ cdef inline double _extra_1d(double u) noexcept nogil:
     return 0.0
 
 
+DEF FEATHER_SENTINEL = -1.0
+# Sentinel value: negative multiplier cancels feathering for that edge.
+
+
 cdef inline void _feather_dist_2d(
     double ux, double uy,
     double* dx, double* dy,
     double under_x, double over_x,
     double under_y, double over_y,
 ) noexcept nogil:
-    """Compute per-edge feather distances for x and y axes."""
+    """Compute per-edge feather distances for x and y axes.
+
+    When a multiplier is negative, the corresponding distance is set to
+    FEATHER_SENTINEL, which causes the caller to treat it as zero
+    (full interior, no feathering contribution from that edge).
+    """
     if ux < 0.0:
-        dx[0] = -ux * under_x
+        dx[0] = -ux * under_x if under_x >= 0.0 else FEATHER_SENTINEL
     elif ux > 1.0:
-        dx[0] = (ux - 1.0) * over_x
+        dx[0] = (ux - 1.0) * over_x if over_x >= 0.0 else FEATHER_SENTINEL
     else:
         dx[0] = 0.0
 
     if uy < 0.0:
-        dy[0] = -uy * under_y
+        dy[0] = -uy * under_y if under_y >= 0.0 else FEATHER_SENTINEL
     elif uy > 1.0:
-        dy[0] = (uy - 1.0) * over_y
+        dy[0] = (uy - 1.0) * over_y if over_y >= 0.0 else FEATHER_SENTINEL
     else:
         dy[0] = 0.0
 
@@ -95,6 +104,10 @@ cdef inline bint _apply_border(
 
     elif border_mode == 1:  # CONSTANT
         _feather_dist_2d(u_x[0], u_y[0], &dx, &dy, under_x, over_x, under_y, over_y)
+        if dx == FEATHER_SENTINEL:
+            dx = 0.0
+        if dy == FEATHER_SENTINEL:
+            dy = 0.0
         extra[0] = sqrt(dx * dx + dy * dy)
         if u_x[0] < 0.0:
             u_x[0] = 0.0
@@ -122,6 +135,10 @@ cdef inline bint _apply_border(
 
     elif border_mode == 5:  # ARRAY
         _feather_dist_2d(u_x[0], u_y[0], &dx, &dy, under_x, over_x, under_y, over_y)
+        if dx == FEATHER_SENTINEL:
+            dx = 0.0
+        if dy == FEATHER_SENTINEL:
+            dy = 0.0
         extra[0] = sqrt(dx * dx + dy * dy)
         if u_x[0] < 0.0:
             u_x[0] = 0.0

@@ -82,21 +82,22 @@ class TestBorderConfigValidation:
         with pytest.raises(ValueError, match="feathering_width must be non-negative"):
             BorderConfig(feathering_width=-1.0)
 
-    def test_negative_multiplier_x_under(self):
-        with pytest.raises(ValueError, match="feathering multipliers must be non-negative"):
-            BorderConfig(feathering_x_undershoot_multiplier=-1.0)
+    def test_negative_multiplier_cancels_feathering(self):
+        """Negative multipliers cancel feathering (pure border)."""
+        bc = BorderConfig(feathering_x_undershoot_multiplier=-1.0)
+        assert bc.feathering_x_undershoot_multiplier == -1.0
 
-    def test_negative_multiplier_x_over(self):
-        with pytest.raises(ValueError, match="feathering multipliers must be non-negative"):
-            BorderConfig(feathering_x_overshoot_multiplier=-1.0)
-
-    def test_negative_multiplier_y_under(self):
-        with pytest.raises(ValueError, match="feathering multipliers must be non-negative"):
-            BorderConfig(feathering_y_undershoot_multiplier=-1.0)
-
-    def test_negative_multiplier_y_over(self):
-        with pytest.raises(ValueError, match="feathering multipliers must be non-negative"):
-            BorderConfig(feathering_y_overshoot_multiplier=-1.0)
+    def test_negative_multiplier_all_four(self):
+        bc = BorderConfig(
+            feathering_x_undershoot_multiplier=-2.0,
+            feathering_x_overshoot_multiplier=-1.5,
+            feathering_y_undershoot_multiplier=-3.0,
+            feathering_y_overshoot_multiplier=-1.0,
+        )
+        assert bc.feathering_x_undershoot_multiplier == -2.0
+        assert bc.feathering_x_overshoot_multiplier == -1.5
+        assert bc.feathering_y_undershoot_multiplier == -3.0
+        assert bc.feathering_y_overshoot_multiplier == -1.0
 
 
 class TestBorderConfigDerivation:

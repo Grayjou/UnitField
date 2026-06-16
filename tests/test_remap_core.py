@@ -237,6 +237,45 @@ class TestFeathering:
         result = remap_tensor(src, xs, ys, interpolation=1, border_config=bc)
         assert result[0, 0, 0] == pytest.approx(0.0, abs=0.01)
 
+    def test_negative_multiplier_sentinel_full_interior(self, src):
+        """Negative multiplier = sentinel = that axis contributes 0 distance."""
+        xs, ys = self._make_map(0.5, -0.2)
+        # y is OOB by 0.2, but y multiplier is -1.0 (sentinel) → dy = 0
+        # dx = 0 (x inside), extra = sqrt(0+0) = 0 → no feathering → sample value
+        bc = BorderConfig.constant(
+            0.0, feathering_width=0.4,
+            feathering_y_undershoot_multiplier=-1.0,
+            feathering_y_overshoot_multiplier=-1.0,
+        )
+        result = remap_tensor(src, xs, ys, interpolation=1, border_config=bc)
+        assert result[0, 0, 0] == pytest.approx(10.0, abs=0.01)
+
+    def test_negative_multiplier_one_axis_only(self, src):
+        """Negative on one axis, positive on the other — only non-sentinel contributes."""
+        xs, ys = self._make_map(-0.3, -0.2)
+        # Both axes OOB. x multiplier positive (dx=0.6), y negative (sentinel → dy=0).
+        # extra = sqrt(0.6^2 + 0^2) = 0.6 ≥ fw=0.5 → pure border (0.0)
+        bc = BorderConfig.constant(
+            0.0, feathering_width=0.5,
+            feathering_x_undershoot_multiplier=2.0,   # dx = 0.3 * 2.0 = 0.6
+            feathering_y_undershoot_multiplier=-1.0,  # sentinel → 0
+        )
+        result = remap_tensor(src, xs, ys, interpolation=1, border_config=bc)
+        assert result[0, 0, 0] == pytest.approx(0.0, abs=0.01)
+
+    def test_positive_multiplier_normal_blend(self, src):
+        """Positive multiplier produces partial blend, not pure border."""
+        xs, ys = self._make_map(0.5, -0.1)
+        # dy=0.1, extra=0.1, fw=0.2 → blend=0.5 → 5.0
+        bc = BorderConfig.constant(
+            0.0, feathering_width=0.2,
+            feathering_y_undershoot_multiplier=1.0,
+            feathering_y_overshoot_multiplier=1.0,
+        )
+        result = remap_tensor(src, xs, ys, interpolation=1, border_config=bc)
+        # Should be partial blend, not 0.0 (pure border) or 10.0 (pure src)
+        assert 0.0 < result[0, 0, 0] < 10.0
+
 
 # ---------------------------------------------------------------------------
 # Dtype handling

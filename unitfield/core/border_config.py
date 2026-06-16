@@ -28,9 +28,13 @@ class BorderConfig:
         array: Optional 2-D / 3-D background array for ARRAY mode.
         feathering_width: Smooth-blend band width at borders (0.0 = hard edge).
         feathering_x_undershoot_multiplier: Left edge feather multiplier (u_x < 0.0).
+            Negative values cancel feathering (pure border, hard edge).
         feathering_x_overshoot_multiplier: Right edge feather multiplier (u_x > 1.0).
+            Negative values cancel feathering (pure border, hard edge).
         feathering_y_undershoot_multiplier: Top edge feather multiplier (u_y < 0.0).
+            Negative values cancel feathering (pure border, hard edge).
         feathering_y_overshoot_multiplier: Bottom edge feather multiplier (u_y > 1.0).
+            Negative values cancel feathering (pure border, hard edge).
     """
 
     mode: BorderMode = BorderMode.CLAMP
@@ -51,13 +55,8 @@ class BorderConfig:
     def __post_init__(self) -> None:
         if self.feathering_width < 0.0:
             raise ValueError("feathering_width must be non-negative")
-        if any(x < 0.0 for x in [
-            self.feathering_x_undershoot_multiplier,
-            self.feathering_x_overshoot_multiplier,
-            self.feathering_y_undershoot_multiplier,
-            self.feathering_y_overshoot_multiplier,
-        ]):
-            raise ValueError("feathering multipliers must be non-negative")
+        # Negative multipliers are valid — they cancel feathering
+        # (pure border) for that edge.  No validation needed.
         if self.mode == BorderMode.ARRAY and self.array is None:
             raise ValueError("ARRAY mode requires a non-None array")
         if self.feather_dims is not None:
