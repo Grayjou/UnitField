@@ -1,7 +1,7 @@
 """Unit field transformation module for coordinate mappings."""
 
 from .border_config import BorderConfig
-from .enums import BorderMode, InterpMethod
+from .enums import BorderMode, FeatheringMode, InterpMethod
 from .types import UnitArray, UnitSpaceVector
 from .unitfield import (
     MappedUnitField,
@@ -17,6 +17,7 @@ __version__ = "0.2.4"
 __all__ = [
     'InterpMethod',
     'BorderMode',
+    'FeatheringMode',
     'BorderConfig',
     'UnitArray',
     'UnitSpaceVector',

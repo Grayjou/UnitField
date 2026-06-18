@@ -1,5 +1,5 @@
 from .core.border_config import BorderConfig
-from .core.enums import BorderMode, InterpMethod
+from .core.enums import BorderMode, FeatheringMode, InterpMethod
 from .core.types import UnitArray, UnitSpaceVector
 from .core.unitfield import (
     MappedUnitField,
@@ -41,10 +41,11 @@ UNDField = UnitNdimField
 MUnitField = MappedUnitField
 
 
-__version__ = "0.2.2"
+__version__ = "0.2.6"
 __all__ = [
     'InterpMethod',
     'BorderMode',
+    'FeatheringMode',
     'BorderConfig',
     'UnitArray',
     'UnitSpaceVector',

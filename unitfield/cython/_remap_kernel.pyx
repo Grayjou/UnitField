@@ -209,6 +209,7 @@ cdef void _remap_kernel_impl(
     double feather_w,
     double under_x, double over_x,
     double under_y, double over_y,
+    int feather_mode,
     const double[::1] feather_d,
     int interp_mode,
     Py_ssize_t H, Py_ssize_t W, Py_ssize_t C,
@@ -230,23 +231,29 @@ cdef void _remap_kernel_impl(
 
             # OOB feather distance; explicit extra=0.0 for OpenMP privatisation
             extra = 0.0
-            oob = _apply_border(&u_x, &u_y, &extra, border_mode, under_x, over_x, under_y, over_y)
+            oob = _apply_border(&u_x, &u_y, &extra, border_mode, under_x, over_x, under_y, over_y, feather_mode)
 
-            if oob and (border_mode == 1 or border_mode == 5):
+            if (border_mode == 1 or border_mode == 5) and (oob or feather_mode == 1):
                 for ch in range(C):
                     val = _sample_1ch(src, u_x, u_y, ch, H, W, interp_mode)
                     fw = feather_d[ch] if use_feather_d else feather_w
-                    if fw <= 0.0 or extra >= fw:
-                        if border_mode == 1:
-                            dst[h, w, ch] = border_const
+                    if border_mode == 1:
+                        border_val = border_const
+                    else:
+                        border_val = border_array[h, w, ch]
+
+                    if feather_mode == 1:
+                        if oob or fw <= 0.0:
+                            dst[h, w, ch] = border_val
+                        elif extra >= fw:
+                            dst[h, w, ch] = val
                         else:
-                            dst[h, w, ch] = border_array[h, w, ch]
+                            blend = 1.0 - extra / fw
+                            dst[h, w, ch] = val + blend * (border_val - val)
+                    elif fw <= 0.0 or extra >= fw:
+                        dst[h, w, ch] = border_val
                     else:
                         blend = extra / fw
-                        if border_mode == 1:
-                            border_val = border_const
-                        else:
-                            border_val = border_array[h, w, ch]
                         dst[h, w, ch] = val + blend * (border_val - val)
             else:
                 for ch in range(C):
@@ -370,6 +377,7 @@ def remap_tensor(
         bc.feathering_x_overshoot_multiplier,
         bc.feathering_y_undershoot_multiplier,
         bc.feathering_y_overshoot_multiplier,
+        bc.feathering_mode.value,
         feather_d,
         interpolation,
         H, W, C,

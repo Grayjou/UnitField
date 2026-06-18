@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from unitfield.core.border_config import BorderConfig
-from unitfield.core.enums import BorderMode
+from unitfield.core.enums import BorderMode, FeatheringMode
 
 
 class TestBorderMode:
@@ -17,6 +17,14 @@ class TestBorderMode:
         assert BorderMode.WRAP == 3
         assert BorderMode.REFLECT_101 == 4
         assert BorderMode.ARRAY == 5
+
+
+class TestFeatheringMode:
+    """FeatheringMode enum values and semantics."""
+
+    def test_values(self):
+        assert FeatheringMode.BEYOND_BORDER == 0
+        assert FeatheringMode.TO_BORDER == 1
 
     def test_int_enum(self):
         assert isinstance(BorderMode.CLAMP, int)
@@ -36,6 +44,7 @@ class TestBorderConfigDefault:
         assert bc.feathering_x_overshoot_multiplier == 1.0
         assert bc.feathering_y_undershoot_multiplier == 1.0
         assert bc.feathering_y_overshoot_multiplier == 1.0
+        assert bc.feathering_mode == FeatheringMode.BEYOND_BORDER
 
     def test_clamp_constructor(self):
         bc = BorderConfig.clamp()
@@ -54,6 +63,10 @@ class TestBorderConfigConstant:
     def test_with_feathering(self):
         bc = BorderConfig.constant(0.5, feathering_width=2.0)
         assert bc.feathering_width == 2.0
+
+    def test_with_feathering_mode(self):
+        bc = BorderConfig.constant(0.5, feathering_mode=FeatheringMode.TO_BORDER)
+        assert bc.feathering_mode == FeatheringMode.TO_BORDER
 
     def test_per_channel_value(self):
         arr = np.array([0.1, 0.2, 0.3])

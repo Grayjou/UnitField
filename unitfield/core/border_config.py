@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from .enums import BorderMode
+from .enums import BorderMode, FeatheringMode
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,10 @@ class BorderConfig:
             Negative values cancel feathering (pure border, hard edge).
         feathering_y_overshoot_multiplier: Bottom edge feather multiplier (u_y > 1.0).
             Negative values cancel feathering (pure border, hard edge).
+        feathering_mode: Where the feathering blend region lives.
+            ``BEYOND_BORDER`` (default) — feathering activates outside [0,1].
+            ``TO_BORDER`` — feathering activates inside, toward the nearest edge.
+            See :class:`FeatheringMode` for details.
     """
 
     mode: BorderMode = BorderMode.CLAMP
@@ -45,6 +49,7 @@ class BorderConfig:
     feathering_x_overshoot_multiplier: float = 1.0
     feathering_y_undershoot_multiplier: float = 1.0
     feathering_y_overshoot_multiplier: float = 1.0
+    feathering_mode: FeatheringMode = FeatheringMode.BEYOND_BORDER
     feather_dims: list | np.ndarray | None = None
     """Per-channel bool mask of length ``C``.
     ``True`` = channel participates in feather blend; ``False`` = hard
@@ -80,6 +85,7 @@ class BorderConfig:
         feathering_x_overshoot_multiplier: float = 1.0,
         feathering_y_undershoot_multiplier: float = 1.0,
         feathering_y_overshoot_multiplier: float = 1.0,
+        feathering_mode: FeatheringMode = FeatheringMode.BEYOND_BORDER,
     ) -> BorderConfig:
         """CONSTANT mode filled with ``value`` (scalar or per-channel)."""
         return cls(
@@ -90,6 +96,7 @@ class BorderConfig:
             feathering_x_overshoot_multiplier=feathering_x_overshoot_multiplier,
             feathering_y_undershoot_multiplier=feathering_y_undershoot_multiplier,
             feathering_y_overshoot_multiplier=feathering_y_overshoot_multiplier,
+            feathering_mode=feathering_mode,
         )
 
     @classmethod
@@ -100,6 +107,7 @@ class BorderConfig:
         feathering_x_overshoot_multiplier: float = 1.0,
         feathering_y_undershoot_multiplier: float = 1.0,
         feathering_y_overshoot_multiplier: float = 1.0,
+        feathering_mode: FeatheringMode = FeatheringMode.BEYOND_BORDER,
     ) -> BorderConfig:
         """ARRAY border (composite-onto) path using ``array`` as background."""
         return cls(
@@ -110,6 +118,7 @@ class BorderConfig:
             feathering_x_overshoot_multiplier=feathering_x_overshoot_multiplier,
             feathering_y_undershoot_multiplier=feathering_y_undershoot_multiplier,
             feathering_y_overshoot_multiplier=feathering_y_overshoot_multiplier,
+            feathering_mode=feathering_mode,
         )
 
     def with_(self, **changes: Any) -> BorderConfig:

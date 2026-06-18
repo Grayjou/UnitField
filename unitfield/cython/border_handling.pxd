@@ -1,6 +1,6 @@
 """Border-handling inline functions for Cython remap kernel."""
 
-from libc.math cimport fabs, fmod, sqrt, INFINITY
+from libc.math cimport fabs, fmod, fmin, sqrt, INFINITY
 
 
 cdef inline double _tri2(double t) noexcept nogil:
@@ -40,7 +40,8 @@ cdef inline double _extra_1d(double u) noexcept nogil:
 
 
 DEF FEATHER_SENTINEL = -1.0
-# Sentinel value: negative multiplier cancels feathering for that edge.
+DEF FEATHER_BEYOND_BORDER = 0
+DEF FEATHER_TO_BORDER = 1
 
 
 cdef inline void _feather_dist_2d(
@@ -48,24 +49,43 @@ cdef inline void _feather_dist_2d(
     double* dx, double* dy,
     double under_x, double over_x,
     double under_y, double over_y,
+    int feather_mode,
 ) noexcept nogil:
     """Compute per-edge feather distances for x and y axes.
 
-    When a multiplier is negative, the corresponding distance is set to
-    FEATHER_SENTINEL, which causes the caller to treat it as zero
-    (full interior, no feathering contribution from that edge).
+    BEYOND_BORDER uses outside overshoot distance.  TO_BORDER uses distance
+    to the nearest enabled edge while inside, and full border once outside.
+    Negative multipliers saturate when OOB and contribute nothing inside.
     """
     if ux < 0.0:
-        dx[0] = -ux * under_x if under_x >= 0.0 else FEATHER_SENTINEL
+        dx[0] = -ux * under_x if under_x >= 0.0 else INFINITY
     elif ux > 1.0:
-        dx[0] = (ux - 1.0) * over_x if over_x >= 0.0 else FEATHER_SENTINEL
+        dx[0] = (ux - 1.0) * over_x if over_x >= 0.0 else INFINITY
+    elif feather_mode == FEATHER_TO_BORDER:
+        if under_x >= 0.0 and over_x >= 0.0:
+            dx[0] = fmin(ux * under_x, (1.0 - ux) * over_x)
+        elif under_x >= 0.0:
+            dx[0] = ux * under_x
+        elif over_x >= 0.0:
+            dx[0] = (1.0 - ux) * over_x
+        else:
+            dx[0] = FEATHER_SENTINEL
     else:
         dx[0] = 0.0
 
     if uy < 0.0:
-        dy[0] = -uy * under_y if under_y >= 0.0 else FEATHER_SENTINEL
+        dy[0] = -uy * under_y if under_y >= 0.0 else INFINITY
     elif uy > 1.0:
-        dy[0] = (uy - 1.0) * over_y if over_y >= 0.0 else FEATHER_SENTINEL
+        dy[0] = (uy - 1.0) * over_y if over_y >= 0.0 else INFINITY
+    elif feather_mode == FEATHER_TO_BORDER:
+        if under_y >= 0.0 and over_y >= 0.0:
+            dy[0] = fmin(uy * under_y, (1.0 - uy) * over_y)
+        elif under_y >= 0.0:
+            dy[0] = uy * under_y
+        elif over_y >= 0.0:
+            dy[0] = (1.0 - uy) * over_y
+        else:
+            dy[0] = FEATHER_SENTINEL
     else:
         dy[0] = 0.0
 
@@ -75,6 +95,7 @@ cdef inline bint _apply_border(
     int border_mode,
     double under_x, double over_x,
     double under_y, double over_y,
+    int feather_mode,
 ) noexcept nogil:
     """Transform coordinates in-place and compute OOB feather distance.
 
@@ -103,12 +124,18 @@ cdef inline bint _apply_border(
         extra[0] = 0.0
 
     elif border_mode == 1:  # CONSTANT
-        _feather_dist_2d(u_x[0], u_y[0], &dx, &dy, under_x, over_x, under_y, over_y)
-        if dx == FEATHER_SENTINEL:
-            dx = 0.0
-        if dy == FEATHER_SENTINEL:
-            dy = 0.0
-        extra[0] = sqrt(dx * dx + dy * dy)
+        _feather_dist_2d(u_x[0], u_y[0], &dx, &dy, under_x, over_x, under_y, over_y, feather_mode)
+        if feather_mode == FEATHER_TO_BORDER:
+            if dx == FEATHER_SENTINEL and dy == FEATHER_SENTINEL:
+                extra[0] = INFINITY
+            elif dx == FEATHER_SENTINEL:
+                extra[0] = dy
+            elif dy == FEATHER_SENTINEL:
+                extra[0] = dx
+            else:
+                extra[0] = fmin(dx, dy)
+        else:
+            extra[0] = sqrt(dx * dx + dy * dy)
         if u_x[0] < 0.0:
             u_x[0] = 0.0
         elif u_x[0] > 1.0:
@@ -134,12 +161,18 @@ cdef inline bint _apply_border(
         extra[0] = 0.0
 
     elif border_mode == 5:  # ARRAY
-        _feather_dist_2d(u_x[0], u_y[0], &dx, &dy, under_x, over_x, under_y, over_y)
-        if dx == FEATHER_SENTINEL:
-            dx = 0.0
-        if dy == FEATHER_SENTINEL:
-            dy = 0.0
-        extra[0] = sqrt(dx * dx + dy * dy)
+        _feather_dist_2d(u_x[0], u_y[0], &dx, &dy, under_x, over_x, under_y, over_y, feather_mode)
+        if feather_mode == FEATHER_TO_BORDER:
+            if dx == FEATHER_SENTINEL and dy == FEATHER_SENTINEL:
+                extra[0] = INFINITY
+            elif dx == FEATHER_SENTINEL:
+                extra[0] = dy
+            elif dy == FEATHER_SENTINEL:
+                extra[0] = dx
+            else:
+                extra[0] = fmin(dx, dy)
+        else:
+            extra[0] = sqrt(dx * dx + dy * dy)
         if u_x[0] < 0.0:
             u_x[0] = 0.0
         elif u_x[0] > 1.0:

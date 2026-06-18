@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from unitfield import BorderConfig, BorderMode, remap_tensor
+from unitfield import BorderConfig, BorderMode, FeatheringMode, remap_tensor
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -237,11 +237,9 @@ class TestFeathering:
         result = remap_tensor(src, xs, ys, interpolation=1, border_config=bc)
         assert result[0, 0, 0] == pytest.approx(0.0, abs=0.01)
 
-    def test_negative_multiplier_sentinel_full_interior(self, src):
-        """Negative multiplier = sentinel = that axis contributes 0 distance."""
-        xs, ys = self._make_map(0.5, -0.2)
-        # y is OOB by 0.2, but y multiplier is -1.0 (sentinel) → dy = 0
-        # dx = 0 (x inside), extra = sqrt(0+0) = 0 → no feathering → sample value
+    def test_beyond_border_negative_multiplier_in_bounds_full_internal(self, src):
+        """BEYOND_BORDER + in-bounds + negative multiplier = full internal."""
+        xs, ys = self._make_map(0.5, 0.5)
         bc = BorderConfig.constant(
             0.0, feathering_width=0.4,
             feathering_y_undershoot_multiplier=-1.0,
@@ -250,15 +248,59 @@ class TestFeathering:
         result = remap_tensor(src, xs, ys, interpolation=1, border_config=bc)
         assert result[0, 0, 0] == pytest.approx(10.0, abs=0.01)
 
+    def test_beyond_border_negative_multiplier_oob_full_border(self, src):
+        """BEYOND_BORDER + OOB + negative multiplier = infinite distance/full border."""
+        xs, ys = self._make_map(0.5, -0.2)
+        bc = BorderConfig.constant(
+            0.0, feathering_width=0.4,
+            feathering_y_undershoot_multiplier=-1.0,
+            feathering_y_overshoot_multiplier=-1.0,
+        )
+        result = remap_tensor(src, xs, ys, interpolation=1, border_config=bc)
+        assert result[0, 0, 0] == pytest.approx(0.0, abs=0.01)
+
     def test_negative_multiplier_one_axis_only(self, src):
-        """Negative on one axis, positive on the other — only non-sentinel contributes."""
+        """BEYOND_BORDER negative OOB multiplier saturates even with another axis."""
         xs, ys = self._make_map(-0.3, -0.2)
-        # Both axes OOB. x multiplier positive (dx=0.6), y negative (sentinel → dy=0).
-        # extra = sqrt(0.6^2 + 0^2) = 0.6 ≥ fw=0.5 → pure border (0.0)
         bc = BorderConfig.constant(
             0.0, feathering_width=0.5,
             feathering_x_undershoot_multiplier=2.0,   # dx = 0.3 * 2.0 = 0.6
-            feathering_y_undershoot_multiplier=-1.0,  # sentinel → 0
+            feathering_y_undershoot_multiplier=-1.0,  # sentinel → INFINITY
+        )
+        result = remap_tensor(src, xs, ys, interpolation=1, border_config=bc)
+        assert result[0, 0, 0] == pytest.approx(0.0, abs=0.01)
+
+    def test_to_border_positive_multiplier_blends_inside(self, src):
+        """TO_BORDER blends inside toward the border value near an edge."""
+        xs, ys = self._make_map(0.5, 0.1)
+        # dy=0.1, fw=0.2 → blend=1 - 0.1/0.2 = 0.5 → 5.0
+        bc = BorderConfig.constant(
+            0.0, feathering_width=0.2,
+            feathering_mode=FeatheringMode.TO_BORDER,
+        )
+        result = remap_tensor(src, xs, ys, interpolation=1, border_config=bc)
+        assert result[0, 0, 0] == pytest.approx(5.0, abs=0.01)
+
+    def test_to_border_negative_multiplier_in_bounds_full_internal(self, src):
+        """TO_BORDER + in-bounds + negative multiplier = no contribution/full internal."""
+        xs, ys = self._make_map(0.5, 0.1)
+        bc = BorderConfig.constant(
+            0.0, feathering_width=0.2,
+            feathering_y_undershoot_multiplier=-1.0,
+            feathering_y_overshoot_multiplier=-1.0,
+            feathering_mode=FeatheringMode.TO_BORDER,
+        )
+        result = remap_tensor(src, xs, ys, interpolation=1, border_config=bc)
+        assert result[0, 0, 0] == pytest.approx(10.0, abs=0.01)
+
+    def test_to_border_negative_multiplier_oob_full_border(self, src):
+        """TO_BORDER + OOB + negative multiplier = infinite distance/full border."""
+        xs, ys = self._make_map(0.5, -0.1)
+        bc = BorderConfig.constant(
+            0.0, feathering_width=0.2,
+            feathering_y_undershoot_multiplier=-1.0,
+            feathering_y_overshoot_multiplier=-1.0,
+            feathering_mode=FeatheringMode.TO_BORDER,
         )
         result = remap_tensor(src, xs, ys, interpolation=1, border_config=bc)
         assert result[0, 0, 0] == pytest.approx(0.0, abs=0.01)

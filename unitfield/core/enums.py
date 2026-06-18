@@ -41,6 +41,21 @@ class InterpMethod(Enum):
         }
 
 
+class FeatheringMode(IntEnum):
+    """Controls where the feathering blend region is positioned.
+
+    BEYOND_BORDER (default): Feathering activates once coordinates cross
+    outside the [0, 1] limits.  Inside the limits the sample is always
+    the raw pixel value.
+
+    TO_BORDER: Feathering activates *inside* the limits, transitioning
+    toward the border value as a coordinate approaches an edge.  Once
+    outside the limits the value is always the full border value.
+    """
+    BEYOND_BORDER = 0
+    TO_BORDER = 1
+
+
 class BorderMode(IntEnum):
     """Border handling modes for coordinate remapping.
 

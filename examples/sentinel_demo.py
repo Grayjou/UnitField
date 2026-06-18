@@ -1,78 +1,79 @@
 """
-Selective edge feathering with negative multiplier sentinel.
+Selective TO_BORDER feathering with a negative multiplier sentinel.
 
 Demonstrates:
-  - Setting a per-edge feather multiplier to a negative value (= sentinel)
-    to disable feathering on that edge while keeping it on others.
-  - CONSTANT border with feathering_width controls the blend region.
-  - Visual comparison: the left edge stays at the sampled interior colour
-    (sentinel), while the right edge blends smoothly to the border colour.
+  - Identity coordinate maps.
+  - FeatheringMode.TO_BORDER, where feathering happens inside the image.
+  - A negative left-edge multiplier disables the left transition to border.
+  - The right edge keeps normal feathering and fades to the border colour.
 """
 
 from pathlib import Path
+import sys
 
 import numpy as np
 from PIL import Image
 
-from unitfield import U2DE, BorderConfig, BorderMode, InterpMethod, upbm_2d
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from unitfield import (
+    U2DE,
+    BorderConfig,
+    BorderMode,
+    FeatheringMode,
+    InterpMethod,
+    upbm_2d,
+)
 
 parent_dir = Path(__file__).parent
 (parent_dir / "output").mkdir(exist_ok=True)
 
-WIDTH, HEIGHT = 200, 100
+WIDTH, HEIGHT = 240, 120
 
 
 def main():
-    # --- source: vertical stripes (red on white) ---
-    stripe = np.zeros((HEIGHT, WIDTH, 3), dtype=np.float64)
-    for i in range(4):
-        x0 = i * WIDTH // 4
-        x1 = (i + 1) * WIDTH // 4
-        if i % 2 == 0:
-            stripe[:, x0:x1] = [1.0, 0.0, 0.0]   # red
-        else:
-            stripe[:, x0:x1] = [1.0, 1.0, 1.0]   # white
+    # --- source: red/white vertical stripes ---
+    src = np.zeros((HEIGHT, WIDTH, 3), dtype=np.float64)
+    for i in range(8):
+        x0 = i * WIDTH // 8
+        x1 = (i + 1) * WIDTH // 8
+        src[:, x0:x1] = [1.0, 0.0, 0.0] if i % 2 == 0 else [1.0, 1.0, 1.0]
 
-    # --- coordinate map: identity stretched to [-0.5, 1.5] ---
-    upbm = upbm_2d(WIDTH, HEIGHT)
-    stretched = upbm.copy()
-    x = stretched[..., 0]
-    x = 2.0 * x - 0.5                                             # [0,1] → [-0.5, 1.5]
-    stretched[..., 0] = x
-    stretched[..., 1] = upbm[..., 1]                              # y stays identity [0,1]
+    # --- identity unit-space coordinate map ---
+    identity = upbm_2d(WIDTH, HEIGHT)
+    endo = U2DE(identity, interp_method=InterpMethod.LINEAR)
 
-    endo = U2DE(stretched, interp_method=InterpMethod.LINEAR)
-
-    # --- left edge sentinel, right edge normal ---
+    # --- TO_BORDER: left disabled, right enabled ---
     bc = BorderConfig(
         mode=BorderMode.CONSTANT,
-        constant_value=np.array([0.0, 0.0, 1.0]),          # blue border
-        feathering_width=0.3,
-        feathering_x_undershoot_multiplier=-1.0,            # left:  sentinel → no feather
-        feathering_x_overshoot_multiplier=1.0,              # right: normal feather
+        constant_value=np.array([0.0, 0.0, 1.0]),       # blue border
+        feathering_width=0.25,
+        feathering_mode=FeatheringMode.TO_BORDER,
+        feathering_x_undershoot_multiplier=-1.0,       # left: disabled/full internal
+        feathering_x_overshoot_multiplier=1.0,         # right: fade to blue
+        #feathering_y_undershoot_multiplier=-1.0,       # ignore top edge for this demo
+        #feathering_y_overshoot_multiplier=-1.0,        # ignore bottom edge for this demo
         feather_dims=(True, True, True),
     )
 
-    remapped = endo.remap(stripe, interpolation=1, border_config=bc)
+    remapped = endo.remap(src, interpolation=1, border_config=bc)
     out = (np.clip(remapped, 0, 1) * 255).astype(np.uint8)
     img = Image.fromarray(out)
 
-    # label regions with text
     from PIL import ImageDraw, ImageFont
     draw = ImageDraw.Draw(img)
     try:
         font = ImageFont.truetype("arial.ttf", 14)
     except OSError:
         font = ImageFont.load_default()
-    draw.text((5, 2),  "sentinel", fill=(0, 0, 0), font=font)
-    draw.text((150, 2), "normal",  fill=(0, 0, 0), font=font)
+    draw.text((5, 4), "left sentinel: internal", fill=(0, 0, 0), font=font)
+    draw.text((WIDTH - 112, 4), "right: to border", fill=(0, 0, 0), font=font)
 
     out_path = parent_dir / "output" / "sentinel_demo.png"
     img.save(out_path)
     print(f"Saved {out_path}")
-    print()
-    print("Left side  (x<0, sentinel=-1):  stays red/white — no border blend")
-    print("Right side (x>1, normal=1):     blends to blue border")
+    print("Left edge: x undershoot multiplier = -1, so TO_BORDER contributes nothing.")
+    print("Right edge: x overshoot multiplier = 1, so it fades to blue inside the image.")
 
 
 if __name__ == "__main__":

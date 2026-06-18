@@ -41,17 +41,25 @@ cdef double FEATHER_SENTINEL = -1.0
 
 
 cdef inline double _feather_dist_1d(
-    double u, double under_x, double over_x,
+    double u, double under_x, double over_x, int feather_mode,
 ) noexcept nogil:
     """1-D per-edge feather distance with multipliers.
 
-    Returns FEATHER_SENTINEL when the multiplier is negative, signalling
-    the caller to zero the distance (full interior, no feathering).
+    BEYOND_BORDER uses outside overshoot distance.  TO_BORDER uses distance
+    to the nearest enabled edge while inside, and full border once outside.
     """
     if u < 0.0:
-        return -u * under_x if under_x >= 0.0 else FEATHER_SENTINEL
+        return -u * under_x if under_x >= 0.0 else INFINITY
     elif u > 1.0:
-        return (u - 1.0) * over_x if over_x >= 0.0 else FEATHER_SENTINEL
+        return (u - 1.0) * over_x if over_x >= 0.0 else INFINITY
+    elif feather_mode == 1:
+        if under_x >= 0.0 and over_x >= 0.0:
+            return u * under_x if u * under_x <= (1.0 - u) * over_x else (1.0 - u) * over_x
+        if under_x >= 0.0:
+            return u * under_x
+        if over_x >= 0.0:
+            return (1.0 - u) * over_x
+        return INFINITY
     return 0.0
 
 
@@ -59,6 +67,7 @@ cdef inline bint _apply_border_1d(
     double* u, double* extra,
     int border_mode,
     double under_x, double over_x,
+    int feather_mode,
 ) noexcept nogil:
     """1-D border handler.
 
@@ -68,7 +77,7 @@ cdef inline bint _apply_border_1d(
     """
     cdef bint oob = (u[0] < 0.0 or u[0] > 1.0)
 
-    if not oob:
+    if not oob and feather_mode != 1:
         extra[0] = 0.0
         return False
 
@@ -78,9 +87,7 @@ cdef inline bint _apply_border_1d(
         extra[0] = 0.0
 
     elif border_mode == 1:  # CONSTANT
-        extra[0] = _feather_dist_1d(u[0], under_x, over_x)
-        if extra[0] == FEATHER_SENTINEL:
-            extra[0] = 0.0
+        extra[0] = _feather_dist_1d(u[0], under_x, over_x, feather_mode)
         if u[0] < 0.0:   u[0] = 0.0
         elif u[0] > 1.0: u[0] = 1.0
 
@@ -94,9 +101,7 @@ cdef inline bint _apply_border_1d(
         u[0] = _ref101(u[0])
         extra[0] = 0.0
     elif border_mode == 5:   # ARRAY
-        extra[0] = _feather_dist_1d(u[0], under_x, over_x)
-        if extra[0] == FEATHER_SENTINEL:
-            extra[0] = 0.0
+        extra[0] = _feather_dist_1d(u[0], under_x, over_x, feather_mode)
         if u[0] < 0.0:   u[0] = 0.0
         elif u[0] > 1.0: u[0] = 1.0
 
@@ -224,6 +229,7 @@ cdef void _remap_kernel_1d_impl(
     const double[:, ::1] border_array,
     double feather_w,
     double under_x, double over_x,
+    int feather_mode,
     const double[::1] feather_d,
     int interp_mode,
     Py_ssize_t N, Py_ssize_t C,
@@ -238,23 +244,29 @@ cdef void _remap_kernel_1d_impl(
         u = map_x[n]
 
         extra = 0.0
-        oob = _apply_border_1d(&u, &extra, border_mode, under_x, over_x)
+        oob = _apply_border_1d(&u, &extra, border_mode, under_x, over_x, feather_mode)
 
-        if oob and (border_mode == 1 or border_mode == 5):
+        if (border_mode == 1 or border_mode == 5) and (oob or feather_mode == 1):
             for ch in range(C):
                 val = _sample_1ch(src[:, ch], u, N, interp_mode)
                 fw = feather_d[ch] if use_feather_d else feather_w
-                if fw <= 0.0 or extra >= fw:
-                    if border_mode == 1:
-                        dst[n, ch] = border_const
+                if border_mode == 1:
+                    border_val = border_const
+                else:
+                    border_val = border_array[n, ch]
+
+                if feather_mode == 1:
+                    if oob or fw <= 0.0:
+                        dst[n, ch] = border_val
+                    elif extra >= fw:
+                        dst[n, ch] = val
                     else:
-                        dst[n, ch] = border_array[n, ch]
+                        blend = 1.0 - extra / fw
+                        dst[n, ch] = val + blend * (border_val - val)
+                elif fw <= 0.0 or extra >= fw:
+                    dst[n, ch] = border_val
                 else:
                     blend = extra / fw
-                    if border_mode == 1:
-                        border_val = border_const
-                    else:
-                        border_val = border_array[n, ch]
                     dst[n, ch] = val + blend * (border_val - val)
         else:
             for ch in range(C):
@@ -339,6 +351,7 @@ def remap_tensor_1d(
         bc.feathering_width,
         bc.feathering_x_undershoot_multiplier,
         bc.feathering_x_overshoot_multiplier,
+        bc.feathering_mode.value,
         feather_d,
         interpolation,
         N, C,
