@@ -1,6 +1,11 @@
 """Smoke tests for UnitField -- do NOT import any compiled Cython extension."""
 
+import os
+import sys
+
 import numpy as np
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import unitfield
 

@@ -3,8 +3,13 @@ from .core.enums import BorderMode, DistanceMode, FeatheringMode, InterpMethod
 from .core.types import UnitArray, UnitSpaceVector
 from .core.unitfield import (
     MappedUnitField,
+    Unit1DEndoInterpolator,
     Unit1DMappedEndomorphism,
+    Unit1dEndoInterpolator,
+    Unit2DEndoInterpolator,
     Unit2DMappedEndomorphism,
+    Unit2dEndoInterpolator,
+    UnitEndomorphismInterpolator,
     UnitMappedEndomorphism,
     UnitNdimField,
     remap_tensor,
@@ -39,11 +44,15 @@ Unit1DEndo = Unit1DMappedEndomorphism
 UnitEndo1D = Unit1DMappedEndomorphism
 U1DE = Unit1DMappedEndomorphism
 UEndo1D = Unit1DMappedEndomorphism
+U1DEInterpolator = Unit1DEndoInterpolator
+UEndo1DInterpolator = Unit1DEndoInterpolator
+U2DEInterpolator = Unit2DEndoInterpolator
+UEndo2DInterpolator = Unit2DEndoInterpolator
 UNDField = UnitNdimField
 MUnitField = MappedUnitField
 
 
-__version__ = "0.2.10"
+__version__ = "0.2.11"
 __all__ = [
     'InterpMethod',
     'BorderMode',
@@ -58,6 +67,11 @@ __all__ = [
     'UnitMappedEndomorphism',
     'Unit2DMappedEndomorphism',
     'Unit1DMappedEndomorphism',
+    'UnitEndomorphismInterpolator',
+    'Unit1DEndoInterpolator',
+    'Unit1dEndoInterpolator',
+    'Unit2DEndoInterpolator',
+    'Unit2dEndoInterpolator',
     'remap_tensor',
     'remap_tensor_1d',
     'remap_envelope',

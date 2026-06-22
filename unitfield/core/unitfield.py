@@ -850,3 +850,190 @@ class Unit1DMappedEndomorphism(UnitMappedEndomorphism):
             interpolation=interpolation,
             border_config=border_config,
         )
+
+
+def _coerce_unit_endomorphism(
+    value,
+    *,
+    interp_method: InterpMethod,
+    cache_size: int | None,
+) -> UnitMappedEndomorphism:
+    if isinstance(value, UnitMappedEndomorphism):
+        return value
+
+    data = np.asarray(value, dtype=DEFAULT_DTYPE)
+    if data.ndim == 1:
+        return Unit1DMappedEndomorphism.from_envelope(
+            data,
+            interp_method=interp_method,
+            cache_size=cache_size,
+        )
+
+    if data.ndim >= 2 and data.shape[-1] == data.ndim - 1:
+        if data.shape[-1] == 1:
+            return Unit1DMappedEndomorphism(
+                data,
+                interp_method=interp_method,
+                cache_size=cache_size,
+            )
+        if data.shape[-1] == 2 and data.ndim == 3:
+            return Unit2DMappedEndomorphism(
+                data,
+                interp_method=interp_method,
+                cache_size=cache_size,
+            )
+        return UnitMappedEndomorphism(
+            data,
+            interp_method=interp_method,
+            cache_size=cache_size,
+        )
+
+    raise ValueError(
+        f"Data shape {data.shape} does not represent a unit endomorphism. "
+        "Use a 1-D envelope or an array shaped (*spatial_dims, ndim)."
+    )
+
+
+def _unit_coordinate_grid(shape: tuple[int, ...], dtype: type = DEFAULT_DTYPE) -> np.ndarray:
+    axes = [np.linspace(0.0, 1.0, size, dtype=dtype) for size in shape]
+    if len(shape) == 1:
+        return axes[0].reshape(-1, 1)
+    return cast(np.ndarray, np.stack(np.meshgrid(*axes, indexing='ij'), axis=-1))
+
+
+def _endomorphism_from_data(
+    data: np.ndarray,
+    *,
+    interp_method: InterpMethod,
+    cache_size: int | None,
+) -> UnitMappedEndomorphism:
+    if data.shape[-1] == 1:
+        return Unit1DMappedEndomorphism(
+            data,
+            interp_method=interp_method,
+            cache_size=cache_size,
+        )
+    if data.shape[-1] == 2 and data.ndim == 3:
+        return Unit2DMappedEndomorphism(
+            data,
+            interp_method=interp_method,
+            cache_size=cache_size,
+        )
+    return UnitMappedEndomorphism(
+        data,
+        interp_method=interp_method,
+        cache_size=cache_size,
+    )
+
+
+class UnitEndomorphismInterpolator:
+    """Interpolate between two mapped unit endomorphisms."""
+
+    def __init__(
+        self,
+        start,
+        end,
+        *,
+        output_shape: tuple[int, ...] | None = None,
+        interp_method: InterpMethod = InterpMethod.LINEAR,
+        cache_size: int | None = DEFAULT_CACHE_SIZE,
+    ):
+        self._start = _coerce_unit_endomorphism(
+            start,
+            interp_method=interp_method,
+            cache_size=cache_size,
+        )
+        self._end = _coerce_unit_endomorphism(
+            end,
+            interp_method=interp_method,
+            cache_size=cache_size,
+        )
+
+        if self._start.ndim != self._end.ndim:
+            raise ValueError(
+                f"Cannot interpolate {self._start.ndim}D and {self._end.ndim}D "
+                "endomorphisms."
+            )
+
+        if output_shape is None:
+            output_shape = self._start.spatial_shape
+        self._output_shape = self._validate_output_shape(output_shape)
+        self._interp_method = interp_method
+        self._cache_size = cache_size
+
+    @property
+    def start(self) -> UnitMappedEndomorphism:
+        return self._start
+
+    @property
+    def end(self) -> UnitMappedEndomorphism:
+        return self._end
+
+    @property
+    def ndim(self) -> int:
+        return self._start.ndim
+
+    @property
+    def output_shape(self) -> tuple[int, ...]:
+        return self._output_shape
+
+    def interpolate(
+        self,
+        t: float,
+        *,
+        output_shape: tuple[int, ...] | None = None,
+        interp_method: InterpMethod | None = None,
+        cache_size: int | None = None,
+        dtype: type = DEFAULT_DTYPE,
+    ) -> UnitMappedEndomorphism:
+        """Return the mapped endomorphism at interpolation parameter ``t``."""
+        alpha = float(t)
+        if not np.isfinite(alpha) or alpha < 0.0 or alpha > 1.0:
+            raise ValueError(f"t must be finite and in [0, 1], got {t}")
+
+        shape = self._output_shape if output_shape is None else self._validate_output_shape(output_shape)
+        result_interp_method = self._interp_method if interp_method is None else interp_method
+        result_cache_size = self._cache_size if cache_size is None else cache_size
+
+        coords = _unit_coordinate_grid(shape, dtype=dtype)
+        start_values = self._start.get_values(coords)
+        end_values = self._end.get_values(coords)
+        data = ((1.0 - alpha) * start_values + alpha * end_values).astype(dtype, copy=False)
+
+        return _endomorphism_from_data(
+            data,
+            interp_method=result_interp_method,
+            cache_size=result_cache_size,
+        )
+
+    def _validate_output_shape(self, output_shape: tuple[int, ...]) -> tuple[int, ...]:
+        shape = tuple(int(size) for size in output_shape)
+        if len(shape) != self.ndim:
+            raise ValueError(
+                f"Expected output shape with {self.ndim} dimensions, got {len(shape)}."
+            )
+        if any(size <= 0 for size in shape):
+            raise ValueError(f"Output shape values must be positive, got {shape}.")
+        return shape
+
+
+class Unit1DEndoInterpolator(UnitEndomorphismInterpolator):
+    """Interpolate between two 1-D unit endomorphisms."""
+
+    def __init__(self, start, end, **kwargs):
+        super().__init__(start, end, **kwargs)
+        if self.ndim != 1:
+            raise ValueError(f"Expected 1-D endomorphisms, got {self.ndim}D.")
+
+
+class Unit2DEndoInterpolator(UnitEndomorphismInterpolator):
+    """Interpolate between two 2-D unit endomorphisms."""
+
+    def __init__(self, start, end, **kwargs):
+        super().__init__(start, end, **kwargs)
+        if self.ndim != 2:
+            raise ValueError(f"Expected 2-D endomorphisms, got {self.ndim}D.")
+
+
+Unit1dEndoInterpolator = Unit1DEndoInterpolator
+Unit2dEndoInterpolator = Unit2DEndoInterpolator

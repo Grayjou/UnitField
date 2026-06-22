@@ -15,6 +15,7 @@
 - **Multiple interpolation methods** — Nearest-neighbor, bilinear, bicubic (Catmull-Rom), Lanczos-3/4.
 - **1-D signal remapping** — The same kernel operates on 1-D signals, useful for audio, time-series, and look-up table applications.
 - **Endomorphism composition** — `Unit2DMappedEndomorphism` supports composition (`f ∘ g`) for chaining transformations.
+- **Endomorphism interpolation** — `Unit1DEndoInterpolator` and `Unit2DEndoInterpolator` blend transforms over time, even when endpoint maps use different sampled sizes.
 
 ## Installation
 
@@ -90,6 +91,24 @@ map_x = np.linspace(0, 1, 800) ** 2  # nonlinear time warp
 warped = remap_tensor_1d(signal, map_x, interpolation=1)
 ```
 
+### Endomorphism Interpolation
+
+```python
+import numpy as np
+from unitfield import Unit1DEndoInterpolator
+
+ease = np.array([0.0, 0.125, 0.25, 0.5625, 1.0])
+linear = np.array([0.0, 0.25, 0.5, 0.75, 1.0])
+
+interpolator = Unit1DEndoInterpolator(ease, linear)
+halfway = interpolator.interpolate(t=0.5)
+
+value = halfway.get_value((0.5,))[0]
+remapped_signal = halfway.remap(signal, interpolation=1)
+```
+
+Endpoint maps can be raw 1-D arrays, `Unit1DMappedEndomorphism`, `Unit2DMappedEndomorphism`, or generic `UnitMappedEndomorphism` instances. If endpoint maps use different sampled sizes, both are evaluated on the requested output grid before blending.
+
 ## Asymmetric Feathering
 
 `BorderConfig` now exposes four independent feather multipliers — one per edge:
@@ -107,8 +126,8 @@ All default to `1.0`. Set to `0.0` for a hard edge, or higher for a softer blend
 
 | Module | Key exports |
 |--------|-------------|
-| `unitfield` | `BorderConfig`, `BorderMode`, `InterpMethod`, `remap_tensor`, `remap_tensor_1d`, `Unit2DMappedEndomorphism`, `Unit1DMappedEndomorphism`, `MappedUnitField` |
-| `unitfield.core` | Same + `UnitNdimField`, `UnitMappedEndomorphism`, `UnitArray`, `UnitSpaceVector` |
+| `unitfield` | `BorderConfig`, `BorderMode`, `InterpMethod`, `remap_tensor`, `remap_tensor_1d`, `Unit2DMappedEndomorphism`, `Unit1DMappedEndomorphism`, `Unit1DEndoInterpolator`, `Unit2DEndoInterpolator`, `MappedUnitField` |
+| `unitfield.core` | Same + `UnitNdimField`, `UnitMappedEndomorphism`, `UnitEndomorphismInterpolator`, `UnitArray`, `UnitSpaceVector` |
 | `unitfield.utilities` | `pbm_2d`, `upbm_2d`, `flat_1d_pbm` — positional basematrix generators |
 
 ## Performance

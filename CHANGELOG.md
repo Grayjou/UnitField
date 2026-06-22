@@ -5,6 +5,19 @@ All notable changes to UnitField will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.11] - 2026-06-22
+
+### Added
+- `UnitEndomorphismInterpolator` for interpolating between mapped unit endomorphisms.
+- `Unit1DEndoInterpolator` and `Unit2DEndoInterpolator` convenience classes, plus lowercase aliases `Unit1dEndoInterpolator` and `Unit2dEndoInterpolator`.
+- Raw 1-D array/list inputs for 1-D endomorphism interpolation, automatically coerced to `Unit1DMappedEndomorphism`.
+- Interpolation across endpoint maps with different sampled sizes by evaluating both endpoints on the requested output grid before blending.
+- Public exports from both `unitfield` and `unitfield.core`.
+
+### Notes
+- No Cython kernel changes are required for this feature. It uses the existing mapped endomorphism sampling path and returns normal endomorphism instances that support `get_value`, `get_values`, and `remap`.
+- This release is intended to support time-varying transforms in downstream tools such as Chromatica2.
+
 ## [0.2.0] - 2026-06-15
 
 ### Added
@@ -62,3 +75,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.1.2]: https://github.com/Grayjou/UnitField/releases/tag/v0.1.2
 [0.1.3]: https://github.com/Grayjou/UnitField/releases/tag/v0.1.3
 [0.2.0]: https://github.com/Grayjou/UnitField/releases/tag/v0.2.0
+[0.2.11]: https://github.com/Grayjou/UnitField/releases/tag/v0.2.11
