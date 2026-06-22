@@ -134,6 +134,41 @@ def remap_tensor_1d(
     ))
 
 
+def sample_callable_1d(
+    fn,
+    count: int,
+    *,
+    endpoint: bool = True,
+    dtype: type = DEFAULT_DTYPE,
+) -> np.ndarray:
+    """Sample a callable over unit interval coordinates into an array."""
+    if count <= 0:
+        raise ValueError(f"count must be positive, got {count}")
+    xs = np.linspace(0.0, 1.0, count, endpoint=endpoint, dtype=dtype)
+    values = np.asarray(fn(xs), dtype=dtype)
+    if values.shape == () or values.shape[0] != count:
+        values = np.asarray([fn(float(x)) for x in xs], dtype=dtype)
+    return values
+
+
+def remap_envelope(
+    values: np.ndarray,
+    map_x: np.ndarray,
+    *,
+    interpolation: int | InterpMethod = 1,
+    border_config: BorderConfig | None = None,
+    num_threads: int = -1,
+) -> np.ndarray:
+    """Remap a 1-D sampled envelope using unit-space coordinates."""
+    return remap_tensor_1d(
+        np.asarray(values),
+        np.asarray(map_x, dtype=np.float64),
+        interpolation=interpolation,
+        border_config=border_config,
+        num_threads=num_threads,
+    )
+
+
 def _convert_constant_value_to_array(
     bc: BorderConfig, src: np.ndarray,
 ) -> BorderConfig:
@@ -163,6 +198,9 @@ def _convert_constant_value_to_array(
             feathering_y_undershoot_multiplier=bc.feathering_y_undershoot_multiplier,
             feathering_y_overshoot_multiplier=bc.feathering_y_overshoot_multiplier,
             feathering_mode=bc.feathering_mode,
+            distance_mode=bc.distance_mode,
+            preserve_non_feather_dims=bc.preserve_non_feather_dims,
+            feather_dims=bc.feather_dims,
         )
     if arr.ndim == 2:
         if arr.shape != (H, W):
@@ -181,6 +219,9 @@ def _convert_constant_value_to_array(
             feathering_y_undershoot_multiplier=bc.feathering_y_undershoot_multiplier,
             feathering_y_overshoot_multiplier=bc.feathering_y_overshoot_multiplier,
             feathering_mode=bc.feathering_mode,
+            distance_mode=bc.distance_mode,
+            preserve_non_feather_dims=bc.preserve_non_feather_dims,
+            feather_dims=bc.feather_dims,
         )
     if arr.ndim == 3:
         if arr.shape != (H, W, C):
@@ -199,6 +240,9 @@ def _convert_constant_value_to_array(
             feathering_y_undershoot_multiplier=bc.feathering_y_undershoot_multiplier,
             feathering_y_overshoot_multiplier=bc.feathering_y_overshoot_multiplier,
             feathering_mode=bc.feathering_mode,
+            distance_mode=bc.distance_mode,
+            preserve_non_feather_dims=bc.preserve_non_feather_dims,
+            feather_dims=bc.feather_dims,
         )
     raise ValueError(
         f"constant_value must be 0-D, 1-D, 2-D, or 3-D, got {arr.ndim}-D"
@@ -234,6 +278,9 @@ def _convert_constant_value_to_array_1d(
             feathering_y_undershoot_multiplier=bc.feathering_y_undershoot_multiplier,
             feathering_y_overshoot_multiplier=bc.feathering_y_overshoot_multiplier,
             feathering_mode=bc.feathering_mode,
+            distance_mode=bc.distance_mode,
+            preserve_non_feather_dims=bc.preserve_non_feather_dims,
+            feather_dims=bc.feather_dims,
         )
     if arr.ndim == 2:
         if arr.shape != (N, C):
@@ -252,6 +299,9 @@ def _convert_constant_value_to_array_1d(
             feathering_y_undershoot_multiplier=bc.feathering_y_undershoot_multiplier,
             feathering_y_overshoot_multiplier=bc.feathering_y_overshoot_multiplier,
             feathering_mode=bc.feathering_mode,
+            distance_mode=bc.distance_mode,
+            preserve_non_feather_dims=bc.preserve_non_feather_dims,
+            feather_dims=bc.feather_dims,
         )
     raise ValueError(
         f"constant_value must be 0-D, 1-D, or 2-D, got {arr.ndim}-D"
@@ -738,6 +788,31 @@ class Unit1DMappedEndomorphism(UnitMappedEndomorphism):
         self._cache_size = cache_size
         if cache_size and cache_size > 0:
             self.get_value = self._create_cached_get_value()  # type: ignore[method-assign]
+
+    @classmethod
+    def from_envelope(
+        cls,
+        values: np.ndarray,
+        *,
+        interp_method: InterpMethod = InterpMethod.LINEAR,
+        cache_size: int | None = DEFAULT_CACHE_SIZE,
+    ) -> Unit1DMappedEndomorphism:
+        """Build a 1-D endomorphism from sampled ``u -> u'`` values."""
+        data = np.asarray(values, dtype=DEFAULT_DTYPE)
+        if data.ndim == 1:
+            data = data.reshape(-1, 1)
+        return cls(data, interp_method=interp_method, cache_size=cache_size)
+
+    def as_callable(self):
+        """Return a callable that evaluates this 1-D endomorphism."""
+        def evaluate(u):
+            arr = np.asarray(u, dtype=DEFAULT_DTYPE)
+            if arr.ndim == 0:
+                return self.get_value((float(arr),))[0]
+            values = self.get_values(arr.reshape(-1, 1))[:, 0]
+            return values.reshape(arr.shape)
+
+        return evaluate
 
     def _create_cached_get_value(self):
         parent_get_value = super().get_value

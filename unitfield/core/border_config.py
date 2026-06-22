@@ -2,12 +2,61 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
+from dataclasses import InitVar, dataclass
 from typing import Any
 
 import numpy as np
 
-from .enums import BorderMode, FeatheringMode
+from .enums import BorderMode, DistanceMode, FeatheringMode
+
+
+def _coerce_distance_mode(value: DistanceMode | int | str) -> DistanceMode:
+    if isinstance(value, DistanceMode):
+        return value
+    if isinstance(value, str):
+        mapping = {
+            "max_norm": DistanceMode.MAX_NORM,
+            "max": DistanceMode.MAX_NORM,
+            "manhattan": DistanceMode.MANHATTAN,
+            "l1": DistanceMode.MANHATTAN,
+            "scaled_manhattan": DistanceMode.SCALED_MANHATTAN,
+            "alpha_max": DistanceMode.ALPHA_MAX,
+            "alpha_max_simple": DistanceMode.ALPHA_MAX_SIMPLE,
+            "taylor": DistanceMode.TAYLOR,
+            "euclidean": DistanceMode.EUCLIDEAN,
+            "l2": DistanceMode.EUCLIDEAN,
+            "true_distance": DistanceMode.EUCLIDEAN,
+            "weighted_minmax": DistanceMode.WEIGHTED_MINMAX,
+        }
+        try:
+            return mapping[value.lower()]
+        except KeyError as exc:
+            raise ValueError(f"Unknown distance mode: {value!r}") from exc
+    return DistanceMode(int(value))
+
+
+def _normalize_feather_mask(value: list | np.ndarray | None, name: str) -> np.ndarray | None:
+    if value is None:
+        return None
+    mask = np.asarray(value)
+    if mask.ndim != 1:
+        raise ValueError(f"{name} must be 1-D (length C), got shape {mask.shape}")
+    return mask.astype(bool)
+
+
+def _resolve_feather_mask(
+    feather_dims: list | np.ndarray | None,
+    feather_channels: list | np.ndarray | None,
+) -> np.ndarray | None:
+    dims = _normalize_feather_mask(feather_dims, "feather_dims")
+    channels = _normalize_feather_mask(feather_channels, "feather_channels")
+    if dims is None:
+        return channels
+    if channels is None:
+        return dims
+    if dims.shape != channels.shape or not np.array_equal(dims, channels):
+        raise ValueError("feather_dims and feather_channels must match when both are provided")
+    return dims
 
 
 @dataclass(frozen=True)
@@ -15,7 +64,7 @@ class BorderConfig:
     """Border-handling configuration for UnitField remap.
 
     Frozen so a single config can be shared safely between calls.
-    Use :meth:`with_` or :func:`dataclasses.replace` to derive modified copies.
+    Use :meth:`with_` to derive modified copies.
 
     Attributes:
         mode: How out-of-bounds coordinates are handled.
@@ -39,6 +88,10 @@ class BorderConfig:
             ``BEYOND_BORDER`` (default) — feathering activates outside [0,1].
             ``TO_BORDER`` — feathering activates inside, toward the nearest edge.
             See :class:`FeatheringMode` for details.
+        distance_mode: Distance metric for combining 2-D feather distances.
+        preserve_non_feather_dims: When ``True``, channels disabled by
+            ``feather_dims`` keep the clamped source value inside a 2-D
+            BEYOND_BORDER feather ramp instead of taking the border value.
     """
 
     mode: BorderMode = BorderMode.CLAMP
@@ -50,27 +103,29 @@ class BorderConfig:
     feathering_y_undershoot_multiplier: float = 1.0
     feathering_y_overshoot_multiplier: float = 1.0
     feathering_mode: FeatheringMode = FeatheringMode.BEYOND_BORDER
+    distance_mode: DistanceMode = DistanceMode.EUCLIDEAN
+    preserve_non_feather_dims: bool = False
     feather_dims: list | np.ndarray | None = None
     """Per-channel bool mask of length ``C``.
     ``True`` = channel participates in feather blend; ``False`` = hard
     edge (full border value at OOB).  ``None`` = all channels feather.
     The canonical use case is RGBA with ``[False, False, False, True]``
     for alpha-only feathering."""
+    feather_channels: InitVar[list | np.ndarray | None] = None
 
-    def __post_init__(self) -> None:
+    def __post_init__(self, feather_channels: list | np.ndarray | None) -> None:
         if self.feathering_width < 0.0:
             raise ValueError("feathering_width must be non-negative")
         # Negative multipliers are valid — they cancel feathering
         # (pure border) for that edge.  No validation needed.
         if self.mode == BorderMode.ARRAY and self.array is None:
             raise ValueError("ARRAY mode requires a non-None array")
-        if self.feather_dims is not None:
-            fd = np.asarray(self.feather_dims)
-            if fd.ndim != 1:
-                raise ValueError(
-                    f"feather_dims must be 1-D (length C), got shape {fd.shape}"
-                )
-            object.__setattr__(self, "feather_dims", fd.astype(bool))
+        object.__setattr__(self, "distance_mode", _coerce_distance_mode(self.distance_mode))
+        object.__setattr__(
+            self,
+            "feather_dims",
+            _resolve_feather_mask(self.feather_dims, feather_channels),
+        )
 
     @classmethod
     def clamp(cls) -> BorderConfig:
@@ -86,6 +141,10 @@ class BorderConfig:
         feathering_y_undershoot_multiplier: float = 1.0,
         feathering_y_overshoot_multiplier: float = 1.0,
         feathering_mode: FeatheringMode = FeatheringMode.BEYOND_BORDER,
+        distance_mode: DistanceMode | int | str = DistanceMode.EUCLIDEAN,
+        preserve_non_feather_dims: bool = False,
+        feather_dims: list | np.ndarray | None = None,
+        feather_channels: list | np.ndarray | None = None,
     ) -> BorderConfig:
         """CONSTANT mode filled with ``value`` (scalar or per-channel)."""
         return cls(
@@ -97,6 +156,10 @@ class BorderConfig:
             feathering_y_undershoot_multiplier=feathering_y_undershoot_multiplier,
             feathering_y_overshoot_multiplier=feathering_y_overshoot_multiplier,
             feathering_mode=feathering_mode,
+            distance_mode=distance_mode,
+            preserve_non_feather_dims=preserve_non_feather_dims,
+            feather_dims=feather_dims,
+            feather_channels=feather_channels,
         )
 
     @classmethod
@@ -108,6 +171,10 @@ class BorderConfig:
         feathering_y_undershoot_multiplier: float = 1.0,
         feathering_y_overshoot_multiplier: float = 1.0,
         feathering_mode: FeatheringMode = FeatheringMode.BEYOND_BORDER,
+        distance_mode: DistanceMode | int | str = DistanceMode.EUCLIDEAN,
+        preserve_non_feather_dims: bool = False,
+        feather_dims: list | np.ndarray | None = None,
+        feather_channels: list | np.ndarray | None = None,
     ) -> BorderConfig:
         """ARRAY border (composite-onto) path using ``array`` as background."""
         return cls(
@@ -119,15 +186,47 @@ class BorderConfig:
             feathering_y_undershoot_multiplier=feathering_y_undershoot_multiplier,
             feathering_y_overshoot_multiplier=feathering_y_overshoot_multiplier,
             feathering_mode=feathering_mode,
+            distance_mode=distance_mode,
+            preserve_non_feather_dims=preserve_non_feather_dims,
+            feather_dims=feather_dims,
+            feather_channels=feather_channels,
         )
 
     def with_(self, **changes: Any) -> BorderConfig:
         """Derive a copy with the given field changes."""
-        return replace(self, **changes)
+        data = self.to_dict()
+        if "feather_channels" in changes and "feather_dims" not in changes:
+            data["feather_dims"] = None
+        data.update(changes)
+        return type(self).from_dict(data)
 
     def to_dict(self) -> dict:
         """Serialise to a plain dict."""
-        return asdict(self)
+        return {
+            "mode": self.mode,
+            "constant_value": self.constant_value,
+            "array": self.array,
+            "feathering_width": self.feathering_width,
+            "feathering_x_undershoot_multiplier": self.feathering_x_undershoot_multiplier,
+            "feathering_x_overshoot_multiplier": self.feathering_x_overshoot_multiplier,
+            "feathering_y_undershoot_multiplier": self.feathering_y_undershoot_multiplier,
+            "feathering_y_overshoot_multiplier": self.feathering_y_overshoot_multiplier,
+            "feathering_mode": self.feathering_mode,
+            "distance_mode": self.distance_mode,
+            "preserve_non_feather_dims": self.preserve_non_feather_dims,
+            "feather_dims": self.feather_dims,
+        }
+
+    def to_json_dict(self) -> dict:
+        """Serialise to a dict containing only JSON-native values."""
+        data = self.to_dict()
+        data["mode"] = self.mode.name
+        data["feathering_mode"] = self.feathering_mode.name
+        data["distance_mode"] = self.distance_mode.name
+        data["constant_value"] = _to_json_value(self.constant_value)
+        data["array"] = _to_json_value(self.array)
+        data["feather_dims"] = _to_json_value(self.feather_dims)
+        return data
 
     @classmethod
     def from_dict(
@@ -141,6 +240,31 @@ class BorderConfig:
         if not isinstance(data, dict):
             raise TypeError(f"Expected dict, BorderConfig, or None, got {type(data)}")
         return cls(**data)
+
+    @classmethod
+    def from_json_dict(cls, data: dict | None) -> BorderConfig:
+        """Deserialise a JSON-safe dict produced by :meth:`to_json_dict`."""
+        if data is None:
+            return cls()
+        if not isinstance(data, dict):
+            raise TypeError(f"Expected dict or None, got {type(data)}")
+        normalized = dict(data)
+        if isinstance(normalized.get("mode"), str):
+            normalized["mode"] = BorderMode[normalized["mode"]]
+        if isinstance(normalized.get("feathering_mode"), str):
+            normalized["feathering_mode"] = FeatheringMode[normalized["feathering_mode"]]
+        if isinstance(normalized.get("distance_mode"), str):
+            value = normalized["distance_mode"]
+            normalized["distance_mode"] = (
+                DistanceMode[value]
+                if value in DistanceMode.__members__
+                else _coerce_distance_mode(value)
+            )
+        if isinstance(normalized.get("constant_value"), list):
+            normalized["constant_value"] = np.asarray(normalized["constant_value"])
+        if isinstance(normalized.get("array"), list):
+            normalized["array"] = np.asarray(normalized["array"])
+        return cls(**normalized)
 
 
 def compute_feather_d(cfg: BorderConfig, C: int) -> np.ndarray:
@@ -168,3 +292,20 @@ def compute_feather_d(cfg: BorderConfig, C: int) -> np.ndarray:
             f"channel count {C}"
         )
     return np.where(mask, cfg.feathering_width, 0.0).astype(np.float64)
+
+
+def _to_json_value(value: Any) -> Any:
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, tuple):
+        return [_to_json_value(item) for item in value]
+    if isinstance(value, list):
+        return [_to_json_value(item) for item in value]
+    return value
+
+
+# Alias to avoid collision
+
+RemapBorderConfig = BorderConfig

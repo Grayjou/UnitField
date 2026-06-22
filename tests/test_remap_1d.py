@@ -16,7 +16,9 @@ from unitfield import (
     BorderMode,
     InterpMethod,
     Unit1DMappedEndomorphism,
+    remap_envelope,
     remap_tensor_1d,
+    sample_callable_1d,
 )
 
 # ---------------------------------------------------------------------------
@@ -227,3 +229,29 @@ class TestUnit1DMappedEndomorphism:
         r = repr(endo)
         assert "Unit1DMappedEndomorphism" in r
         assert "50" in r
+
+    def test_from_envelope(self):
+        endo = Unit1DMappedEndomorphism.from_envelope(np.linspace(0, 1, 50))
+        assert isinstance(endo, Unit1DMappedEndomorphism)
+        assert endo.data.shape == (50, 1)
+
+    def test_as_callable_scalar_and_array(self):
+        endo = Unit1DMappedEndomorphism.from_envelope(np.linspace(0, 1, 50))
+        fn = endo.as_callable()
+        assert fn(0.5) == pytest.approx(0.5, abs=0.02)
+        vals = fn(np.array([0.0, 0.5, 1.0]))
+        np.testing.assert_allclose(vals, [0.0, 0.5, 1.0], atol=0.02)
+
+    def test_sample_callable_1d(self):
+        samples = sample_callable_1d(lambda t: t * t, 5)
+        np.testing.assert_allclose(samples, [0.0, 0.0625, 0.25, 0.5625, 1.0])
+
+    def test_sample_callable_1d_endpoint_false(self):
+        samples = sample_callable_1d(lambda t: t, 4, endpoint=False)
+        np.testing.assert_allclose(samples, [0.0, 0.25, 0.5, 0.75])
+
+    def test_remap_envelope(self):
+        values = np.linspace(0, 1, 10)
+        map_x = np.linspace(1, 0, 10)
+        result = remap_envelope(values, map_x)
+        np.testing.assert_allclose(result, values[::-1], atol=1e-12)

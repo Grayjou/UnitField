@@ -56,6 +56,19 @@ class FeatheringMode(IntEnum):
     TO_BORDER = 1
 
 
+class DistanceMode(IntEnum):
+    """Distance metrics for combining 2-D feather distances."""
+
+    MAX_NORM = 1
+    MANHATTAN = 2
+    SCALED_MANHATTAN = 3
+    ALPHA_MAX = 4
+    ALPHA_MAX_SIMPLE = 5
+    TAYLOR = 6
+    EUCLIDEAN = 7
+    WEIGHTED_MINMAX = 8
+
+
 class BorderMode(IntEnum):
     """Border handling modes for coordinate remapping.
 

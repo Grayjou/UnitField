@@ -15,6 +15,8 @@ cdef void _remap_kernel_impl(
     double under_x, double over_x,
     double under_y, double over_y,
     int feather_mode,
+    int distance_mode,
+    int preserve_non_feather_dims,
     const double[::1] feather_d,
     int interp_mode,
     Py_ssize_t H, Py_ssize_t W, Py_ssize_t C,

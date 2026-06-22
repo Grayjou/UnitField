@@ -1,5 +1,5 @@
-from .core.border_config import BorderConfig
-from .core.enums import BorderMode, FeatheringMode, InterpMethod
+from .core.border_config import BorderConfig, RemapBorderConfig
+from .core.enums import BorderMode, DistanceMode, FeatheringMode, InterpMethod
 from .core.types import UnitArray, UnitSpaceVector
 from .core.unitfield import (
     MappedUnitField,
@@ -9,6 +9,8 @@ from .core.unitfield import (
     UnitNdimField,
     remap_tensor,
     remap_tensor_1d,
+    remap_envelope,
+    sample_callable_1d,
 )
 from .cython._zero_sign import ZERO_SIGN
 
@@ -41,12 +43,14 @@ UNDField = UnitNdimField
 MUnitField = MappedUnitField
 
 
-__version__ = "0.2.6"
+__version__ = "0.2.10"
 __all__ = [
     'InterpMethod',
     'BorderMode',
+    'DistanceMode',
     'FeatheringMode',
     'BorderConfig',
+    'RemapBorderConfig',
     'UnitArray',
     'UnitSpaceVector',
     'UnitNdimField',
@@ -56,6 +60,8 @@ __all__ = [
     'Unit1DMappedEndomorphism',
     'remap_tensor',
     'remap_tensor_1d',
+    'remap_envelope',
+    'sample_callable_1d',
     'clip_abs',
     'ZERO_SIGN',
     'positional_basematrix2d',

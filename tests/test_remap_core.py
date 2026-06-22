@@ -3,7 +3,8 @@
 import numpy as np
 import pytest
 
-from unitfield import BorderConfig, BorderMode, FeatheringMode, remap_tensor
+from unitfield import BorderConfig, BorderMode, DistanceMode, FeatheringMode, remap_tensor
+from unitfield.core.unitfield import _convert_constant_value_to_array
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -317,6 +318,90 @@ class TestFeathering:
         result = remap_tensor(src, xs, ys, interpolation=1, border_config=bc)
         # Should be partial blend, not 0.0 (pure border) or 10.0 (pure src)
         assert 0.0 < result[0, 0, 0] < 10.0
+
+    def test_distance_modes_change_diagonal_oob_feathering(self, src):
+        xs, ys = self._make_map(-0.1, -0.1)
+        common = dict(mode=BorderMode.CONSTANT, constant_value=0.0, feathering_width=0.25)
+
+        max_norm = remap_tensor(
+            src, xs, ys, interpolation=1,
+            border_config=BorderConfig(**common, distance_mode=DistanceMode.MAX_NORM),
+        )
+        manhattan = remap_tensor(
+            src, xs, ys, interpolation=1,
+            border_config=BorderConfig(**common, distance_mode=DistanceMode.MANHATTAN),
+        )
+        euclidean = remap_tensor(
+            src, xs, ys, interpolation=1,
+            border_config=BorderConfig(**common, distance_mode=DistanceMode.EUCLIDEAN),
+        )
+
+        assert max_norm[0, 0, 0] == pytest.approx(6.0, abs=0.01)
+        assert manhattan[0, 0, 0] == pytest.approx(2.0, abs=0.01)
+        assert euclidean[0, 0, 0] == pytest.approx(4.343, abs=0.01)
+
+    def test_default_distance_mode_matches_euclidean(self, src):
+        xs, ys = self._make_map(-0.1, -0.1)
+        default = remap_tensor(
+            src, xs, ys, interpolation=1,
+            border_config=BorderConfig.constant(0.0, feathering_width=0.25),
+        )
+        euclidean = remap_tensor(
+            src, xs, ys, interpolation=1,
+            border_config=BorderConfig.constant(
+                0.0,
+                feathering_width=0.25,
+                distance_mode=DistanceMode.EUCLIDEAN,
+            ),
+        )
+        np.testing.assert_allclose(default, euclidean)
+
+    def test_array_valued_constant_conversion_preserves_distance_and_mask(self, src):
+        bc = BorderConfig.constant(
+            np.array([0.0]),
+            feathering_width=0.25,
+            distance_mode=DistanceMode.MAX_NORM,
+            preserve_non_feather_dims=True,
+            feather_channels=[True],
+        )
+        converted = _convert_constant_value_to_array(bc, src)
+        assert converted.mode == BorderMode.ARRAY
+        assert converted.distance_mode == DistanceMode.MAX_NORM
+        assert converted.preserve_non_feather_dims is True
+        np.testing.assert_array_equal(converted.feather_dims, np.array([True]))
+
+    def test_preserve_non_feather_dims_keeps_rgb_in_alpha_ramp(self):
+        src = np.zeros((3, 3, 4), dtype=np.float64)
+        src[..., 0] = 10.0
+        src[..., 1] = 20.0
+        src[..., 2] = 30.0
+        src[..., 3] = 1.0
+        xs, ys = self._make_map(-0.1, 0.5)
+        bc = BorderConfig.constant(
+            np.array([0.0, 0.0, 0.0, 0.0]),
+            feathering_width=0.2,
+            feather_dims=[False, False, False, True],
+            preserve_non_feather_dims=True,
+        )
+
+        result = remap_tensor(src, xs, ys, interpolation=1, border_config=bc)
+
+        np.testing.assert_allclose(result[0, 0, :3], [10.0, 20.0, 30.0])
+        assert result[0, 0, 3] == pytest.approx(0.5, abs=0.01)
+
+    def test_default_alpha_only_feather_keeps_legacy_rgb_border(self):
+        src = np.ones((3, 3, 4), dtype=np.float64)
+        xs, ys = self._make_map(-0.1, 0.5)
+        bc = BorderConfig.constant(
+            np.array([0.0, 0.0, 0.0, 0.0]),
+            feathering_width=0.2,
+            feather_dims=[False, False, False, True],
+        )
+
+        result = remap_tensor(src, xs, ys, interpolation=1, border_config=bc)
+
+        np.testing.assert_allclose(result[0, 0, :3], [0.0, 0.0, 0.0])
+        assert result[0, 0, 3] == pytest.approx(0.5, abs=0.01)
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 """Border-handling inline functions for Cython remap kernel."""
 
-from libc.math cimport fabs, fmod, fmin, sqrt, INFINITY
+from libc.math cimport fabs, fmod, fmax, fmin, sqrt, INFINITY
 
 
 cdef inline double _tri2(double t) noexcept nogil:
@@ -90,12 +90,34 @@ cdef inline void _feather_dist_2d(
         dy[0] = 0.0
 
 
+cdef inline double _combine_2d_distances(double dx, double dy, int mode) noexcept nogil:
+    if dx == INFINITY or dy == INFINITY:
+        return INFINITY
+    if mode == 1:      # MAX_NORM
+        return fmax(dx, dy)
+    elif mode == 2:    # MANHATTAN
+        return dx + dy
+    elif mode == 3:    # SCALED_MANHATTAN
+        return (dx + dy) * 0.7071067811865476
+    elif mode == 4:    # ALPHA_MAX
+        return fmax(dx, dy) + 0.41421356237309503 * fmin(dx, dy)
+    elif mode == 5:    # ALPHA_MAX_SIMPLE
+        return fmax(dx, dy) + 0.5 * fmin(dx, dy)
+    elif mode == 6:    # TAYLOR
+        return fmax(dx, dy) + 0.5 * fmin(dx, dy) - 0.25 * dx * dx - 0.25 * dy * dy
+    elif mode == 8:    # WEIGHTED_MINMAX
+        return 0.9604 * fmax(dx, dy) + 0.3981 * fmin(dx, dy)
+    else:              # EUCLIDEAN and unknown-safe fallback
+        return sqrt(dx * dx + dy * dy)
+
+
 cdef inline bint _apply_border(
     double* u_x, double* u_y, double* extra,
     int border_mode,
     double under_x, double over_x,
     double under_y, double over_y,
     int feather_mode,
+    int distance_mode,
 ) noexcept nogil:
     """Transform coordinates in-place and compute OOB feather distance.
 
@@ -135,7 +157,7 @@ cdef inline bint _apply_border(
             else:
                 extra[0] = fmin(dx, dy)
         else:
-            extra[0] = sqrt(dx * dx + dy * dy)
+            extra[0] = _combine_2d_distances(dx, dy, distance_mode)
         if u_x[0] < 0.0:
             u_x[0] = 0.0
         elif u_x[0] > 1.0:
@@ -172,7 +194,7 @@ cdef inline bint _apply_border(
             else:
                 extra[0] = fmin(dx, dy)
         else:
-            extra[0] = sqrt(dx * dx + dy * dy)
+            extra[0] = _combine_2d_distances(dx, dy, distance_mode)
         if u_x[0] < 0.0:
             u_x[0] = 0.0
         elif u_x[0] > 1.0:
