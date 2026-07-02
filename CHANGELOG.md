@@ -5,6 +5,19 @@ All notable changes to UnitField will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.12] - 2026-06-29
+
+### Added
+- `resize_unit_field_nearest` for endpoint-aligned nearest-neighbor resizing of sampled unit fields/maps shaped `(height, width, channels)`.
+- `resize_nearest` for endpoint-aligned nearest-neighbor resizing of 2-D and 3-D arrays.
+- Cython source kernel for nearest resize, with vectorized NumPy fallback when the extension has not been built yet.
+- Tests covering upscaling, downscaling, channel preservation, dtype preservation/conversion, contiguous output, and validation errors.
+
+### Notes
+- The intended preview workflow is to evaluate a remap field at low resolution, resize the field to the viewport/document shape, then call `remap_tensor(..., interpolation=InterpMethod.NEAREST_MANHATTAN)`.
+- This prioritizes resizing UnitField maps over owning a general-purpose image resize feature.
+- This release is intended to support smoother Chromatica2 drag-preview rendering.
+
 ## [0.2.11] - 2026-06-22
 
 ### Added
@@ -76,3 +89,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.1.3]: https://github.com/Grayjou/UnitField/releases/tag/v0.1.3
 [0.2.0]: https://github.com/Grayjou/UnitField/releases/tag/v0.2.0
 [0.2.11]: https://github.com/Grayjou/UnitField/releases/tag/v0.2.11
+[0.2.12]: https://github.com/Grayjou/UnitField/releases/tag/v0.2.12

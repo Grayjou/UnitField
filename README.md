@@ -16,6 +16,7 @@
 - **1-D signal remapping** — The same kernel operates on 1-D signals, useful for audio, time-series, and look-up table applications.
 - **Endomorphism composition** — `Unit2DMappedEndomorphism` supports composition (`f ∘ g`) for chaining transformations.
 - **Endomorphism interpolation** — `Unit1DEndoInterpolator` and `Unit2DEndoInterpolator` blend transforms over time, even when endpoint maps use different sampled sizes.
+- **Fast nearest map resize** — `resize_unit_field_nearest` upsamples or downsamples sampled remap fields for low-resolution interactive previews.
 
 ## Installation
 
@@ -81,6 +82,28 @@ result = remap_tensor(
 )
 ```
 
+### Fast Preview From A Low-Resolution Map
+
+```python
+from unitfield import InterpMethod, remap_tensor, resize_unit_field_nearest
+
+# low_res_map shape: (preview_h, preview_w, 2), storing x/y unit coordinates
+full_res_map = resize_unit_field_nearest(
+    low_res_map,
+    width=image.shape[1],
+    height=image.shape[0],
+)
+
+preview = remap_tensor(
+    image,
+    full_res_map[..., 0],
+    full_res_map[..., 1],
+    interpolation=InterpMethod.NEAREST_MANHATTAN,
+)
+```
+
+`resize_unit_field_nearest` is the preferred helper for preview remap fields. `resize_nearest` is also available for generic 2-D or 3-D arrays when a nearest resize is needed directly.
+
 ### 1-D Signal Remapping
 
 ```python
@@ -126,7 +149,7 @@ All default to `1.0`. Set to `0.0` for a hard edge, or higher for a softer blend
 
 | Module | Key exports |
 |--------|-------------|
-| `unitfield` | `BorderConfig`, `BorderMode`, `InterpMethod`, `remap_tensor`, `remap_tensor_1d`, `Unit2DMappedEndomorphism`, `Unit1DMappedEndomorphism`, `Unit1DEndoInterpolator`, `Unit2DEndoInterpolator`, `MappedUnitField` |
+| `unitfield` | `BorderConfig`, `BorderMode`, `InterpMethod`, `remap_tensor`, `remap_tensor_1d`, `resize_unit_field_nearest`, `resize_nearest`, `Unit2DMappedEndomorphism`, `Unit1DMappedEndomorphism`, `Unit1DEndoInterpolator`, `Unit2DEndoInterpolator`, `MappedUnitField` |
 | `unitfield.core` | Same + `UnitNdimField`, `UnitMappedEndomorphism`, `UnitEndomorphismInterpolator`, `UnitArray`, `UnitSpaceVector` |
 | `unitfield.utilities` | `pbm_2d`, `upbm_2d`, `flat_1d_pbm` — positional basematrix generators |
 

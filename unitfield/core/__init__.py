@@ -17,10 +17,12 @@ from .unitfield import (
     remap_envelope,
     remap_tensor,
     remap_tensor_1d,
+    resize_nearest,
+    resize_unit_field_nearest,
     sample_callable_1d,
 )
 
-__version__ = "0.2.11"
+__version__ = "0.2.12"
 __all__ = [
     'InterpMethod',
     'BorderMode',
@@ -42,6 +44,8 @@ __all__ = [
     'Unit2dEndoInterpolator',
     'remap_tensor',
     'remap_tensor_1d',
+    'resize_nearest',
+    'resize_unit_field_nearest',
     'remap_envelope',
     'sample_callable_1d',
 ]

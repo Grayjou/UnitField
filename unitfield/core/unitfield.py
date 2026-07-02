@@ -134,6 +134,89 @@ def remap_tensor_1d(
     ))
 
 
+def _nearest_resize_indices(src_size: int, dst_size: int) -> np.ndarray:
+    if src_size <= 0:
+        raise ValueError(f"source dimensions must be positive, got {src_size}")
+    if dst_size <= 0:
+        raise ValueError(f"target dimensions must be positive, got {dst_size}")
+    if src_size == 1 or dst_size == 1:
+        return np.zeros(dst_size, dtype=np.intp)
+    positions = np.linspace(0.0, src_size - 1, dst_size, dtype=np.float64)
+    return cast(np.ndarray, np.clip(np.floor(positions + 0.5), 0, src_size - 1).astype(np.intp))
+
+
+def _resize_nearest_numpy(image: np.ndarray, width: int, height: int) -> np.ndarray:
+    y_idx = _nearest_resize_indices(image.shape[0], height)
+    x_idx = _nearest_resize_indices(image.shape[1], width)
+    if image.ndim == 2:
+        return cast(np.ndarray, np.ascontiguousarray(image[y_idx[:, None], x_idx]))
+    return cast(np.ndarray, np.ascontiguousarray(image[y_idx[:, None], x_idx, :]))
+
+
+def resize_nearest(
+    image: np.ndarray,
+    width: int,
+    height: int,
+    *,
+    preserve_dtype: bool = True,
+) -> np.ndarray:
+    """Resize a 2-D or 3-D array with nearest-neighbor sampling.
+
+    This helper is intended primarily for resizing sampled unit fields/maps for
+    preview remap workflows. Coordinates are sampled with endpoint alignment,
+    matching UnitField's unit-space convention.
+    """
+    arr = np.asarray(image)
+    if arr.ndim not in (2, 3):
+        raise ValueError(f"image must be 2-D or 3-D, got {arr.ndim}-D")
+    if arr.shape[0] <= 0 or arr.shape[1] <= 0:
+        raise ValueError(f"image spatial dimensions must be positive, got {arr.shape[:2]}")
+    if width <= 0:
+        raise ValueError(f"width must be positive, got {width}")
+    if height <= 0:
+        raise ValueError(f"height must be positive, got {height}")
+
+    result: np.ndarray | None = None
+    if arr.dtype.kind in "fiu" and (arr.dtype.kind != "u" or arr.dtype.itemsize <= 4):
+        try:
+            from ..cython._resize_nearest import resize_nearest as _resize_core
+        except ImportError:
+            _resize_core = None
+        if _resize_core is not None:
+            result = cast(np.ndarray, _resize_core(arr, width, height))
+
+    if result is None:
+        result = _resize_nearest_numpy(arr, width, height)
+
+    if not preserve_dtype:
+        result = result.astype(DEFAULT_DTYPE, copy=False)
+    return cast(np.ndarray, np.ascontiguousarray(result))
+
+
+def resize_unit_field_nearest(
+    field: np.ndarray,
+    width: int,
+    height: int,
+    *,
+    preserve_dtype: bool = True,
+) -> np.ndarray:
+    """Resize a sampled unit field/map with nearest-neighbor sampling.
+
+    Args:
+        field: Array of shape ``(H, W, C)``, for example ``(H, W, 2)`` maps.
+        width: Target width.
+        height: Target height.
+        preserve_dtype: Preserve input dtype by default. If false, output uses
+            UnitField's default dtype.
+    """
+    arr = np.asarray(field)
+    if arr.ndim != 3:
+        raise ValueError(f"field must have shape (height, width, channels), got {arr.ndim}-D")
+    if arr.shape[2] <= 0:
+        raise ValueError("field must have at least one channel")
+    return resize_nearest(arr, width, height, preserve_dtype=preserve_dtype)
+
+
 def sample_callable_1d(
     fn,
     count: int,
