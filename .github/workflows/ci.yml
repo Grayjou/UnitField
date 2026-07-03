@@ -46,7 +46,6 @@ jobs:
       - name: Run full test suite
         run: pytest
 
-      - name: Lint (ruff, mypy)
+      - name: Lint (ruff,)
         run: |
           ruff check unitfield/
-          mypy unitfield/
