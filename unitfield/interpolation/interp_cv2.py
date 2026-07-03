@@ -116,6 +116,9 @@ def cv2_unit_field_sample(
 
     # Scale to pixel space
     map_x, map_y = _scale_to_pixel_space(coords_array, height, width)
+    if coords_array.ndim == 2:
+        map_x = map_x.reshape(-1, 1)
+        map_y = map_y.reshape(-1, 1)
 
     # Get cv2 interpolation constant
     cv2_interp = _CV2_INTERP_MAP[interp_method]

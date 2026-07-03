@@ -470,6 +470,18 @@ class TestOpenCVInterpolation:
         expected = np.array([0.0, 1.0, 0.0])
         np.testing.assert_array_almost_equal(result.ravel(), expected)
 
+    def test_cv2_flat_coordinate_batch_shape(self, sample_image_2d):
+        """Flat point batches should not depend on OpenCV map orientation."""
+        coords = np.random.rand(10, 2)
+
+        result = cv2_unit_field_sample(
+            sample_image_2d,
+            coords,
+            InterpMethod.LINEAR,
+        )
+
+        assert result.shape == (10, 1)
+
     def test_cv2_linear_interpolation(self, sample_image_2d):
         """Test linear interpolation with OpenCV."""
         # Test at edge of square
