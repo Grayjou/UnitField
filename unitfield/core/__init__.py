@@ -6,11 +6,11 @@ from .types import UnitArray, UnitSpaceVector
 from .unitfield import (
     MappedUnitField,
     Unit1DEndoInterpolator,
-    Unit1DMappedEndomorphism,
     Unit1dEndoInterpolator,
+    Unit1DMappedEndomorphism,
     Unit2DEndoInterpolator,
-    Unit2DMappedEndomorphism,
     Unit2dEndoInterpolator,
+    Unit2DMappedEndomorphism,
     UnitEndomorphismInterpolator,
     UnitMappedEndomorphism,
     UnitNdimField,

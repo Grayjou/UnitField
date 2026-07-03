@@ -321,7 +321,11 @@ class TestFeathering:
 
     def test_distance_modes_change_diagonal_oob_feathering(self, src):
         xs, ys = self._make_map(-0.1, -0.1)
-        common = dict(mode=BorderMode.CONSTANT, constant_value=0.0, feathering_width=0.25)
+        common = {
+            "mode": BorderMode.CONSTANT,
+            "constant_value": 0.0,
+            "feathering_width": 0.25,
+        }
 
         max_norm = remap_tensor(
             src, xs, ys, interpolation=1,

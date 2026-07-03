@@ -8,8 +8,8 @@ Demonstrates:
   - The right edge keeps normal feathering and fades to the border colour.
 """
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import numpy as np
 from PIL import Image

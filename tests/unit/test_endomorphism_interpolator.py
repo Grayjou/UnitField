@@ -9,8 +9,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from unitfield import (
     InterpMethod,
     Unit1DEndoInterpolator,
-    Unit1DMappedEndomorphism,
     Unit1dEndoInterpolator,
+    Unit1DMappedEndomorphism,
     Unit2DEndoInterpolator,
     Unit2DMappedEndomorphism,
     UnitEndomorphismInterpolator,
