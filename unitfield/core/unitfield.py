@@ -142,15 +142,15 @@ def _nearest_resize_indices(src_size: int, dst_size: int) -> np.ndarray:
     if src_size == 1 or dst_size == 1:
         return np.zeros(dst_size, dtype=np.intp)
     positions = np.linspace(0.0, src_size - 1, dst_size, dtype=np.float64)
-    return cast(np.ndarray, np.clip(np.floor(positions + 0.5), 0, src_size - 1).astype(np.intp))
+    return np.clip(np.floor(positions + 0.5), 0, src_size - 1).astype(np.intp)
 
 
 def _resize_nearest_numpy(image: np.ndarray, width: int, height: int) -> np.ndarray:
     y_idx = _nearest_resize_indices(image.shape[0], height)
     x_idx = _nearest_resize_indices(image.shape[1], width)
     if image.ndim == 2:
-        return cast(np.ndarray, np.ascontiguousarray(image[y_idx[:, None], x_idx]))
-    return cast(np.ndarray, np.ascontiguousarray(image[y_idx[:, None], x_idx, :]))
+        return np.ascontiguousarray(image[y_idx[:, None], x_idx])
+    return np.ascontiguousarray(image[y_idx[:, None], x_idx, :])
 
 
 def resize_nearest(
@@ -190,7 +190,7 @@ def resize_nearest(
 
     if not preserve_dtype:
         result = result.astype(DEFAULT_DTYPE, copy=False)
-    return cast(np.ndarray, np.ascontiguousarray(result))
+    return np.ascontiguousarray(result)
 
 
 def resize_unit_field_nearest(
@@ -227,8 +227,8 @@ def sample_callable_1d(
     """Sample a callable over unit interval coordinates into an array."""
     if count <= 0:
         raise ValueError(f"count must be positive, got {count}")
-    xs = np.linspace(0.0, 1.0, count, endpoint=endpoint, dtype=dtype)
-    values = np.asarray(fn(xs), dtype=dtype)
+    xs: np.ndarray = np.linspace(0.0, 1.0, count, endpoint=endpoint, dtype=dtype)
+    values: np.ndarray = np.asarray(fn(xs), dtype=dtype)
     if values.shape == () or values.shape[0] != count:
         values = np.asarray([fn(float(x)) for x in xs], dtype=dtype)
     return values
@@ -881,7 +881,7 @@ class Unit1DMappedEndomorphism(UnitMappedEndomorphism):
         cache_size: int | None = DEFAULT_CACHE_SIZE,
     ) -> Unit1DMappedEndomorphism:
         """Build a 1-D endomorphism from sampled ``u -> u'`` values."""
-        data = np.asarray(values, dtype=DEFAULT_DTYPE)
+        data: np.ndarray = np.asarray(values, dtype=DEFAULT_DTYPE)
         if data.ndim == 1:
             data = data.reshape(-1, 1)
         return cls(data, interp_method=interp_method, cache_size=cache_size)
@@ -889,7 +889,7 @@ class Unit1DMappedEndomorphism(UnitMappedEndomorphism):
     def as_callable(self):
         """Return a callable that evaluates this 1-D endomorphism."""
         def evaluate(u):
-            arr = np.asarray(u, dtype=DEFAULT_DTYPE)
+            arr: np.ndarray = np.asarray(u, dtype=DEFAULT_DTYPE)
             if arr.ndim == 0:
                 return self.get_value((float(arr),))[0]
             values = self.get_values(arr.reshape(-1, 1))[:, 0]
@@ -944,7 +944,7 @@ def _coerce_unit_endomorphism(
     if isinstance(value, UnitMappedEndomorphism):
         return value
 
-    data = np.asarray(value, dtype=DEFAULT_DTYPE)
+    data: np.ndarray = np.asarray(value, dtype=DEFAULT_DTYPE)
     if data.ndim == 1:
         return Unit1DMappedEndomorphism.from_envelope(
             data,
@@ -978,10 +978,10 @@ def _coerce_unit_endomorphism(
 
 
 def _unit_coordinate_grid(shape: tuple[int, ...], dtype: type = DEFAULT_DTYPE) -> np.ndarray:
-    axes = [np.linspace(0.0, 1.0, size, dtype=dtype) for size in shape]
+    axes: list[np.ndarray] = [np.linspace(0.0, 1.0, size, dtype=dtype) for size in shape]
     if len(shape) == 1:
         return axes[0].reshape(-1, 1)
-    return cast(np.ndarray, np.stack(np.meshgrid(*axes, indexing='ij'), axis=-1))
+    return np.stack(np.meshgrid(*axes, indexing='ij'), axis=-1)
 
 
 def _endomorphism_from_data(
@@ -1081,7 +1081,10 @@ class UnitEndomorphismInterpolator:
         coords = _unit_coordinate_grid(shape, dtype=dtype)
         start_values = self._start.get_values(coords)
         end_values = self._end.get_values(coords)
-        data = ((1.0 - alpha) * start_values + alpha * end_values).astype(dtype, copy=False)
+        data: np.ndarray = ((1.0 - alpha) * start_values + alpha * end_values).astype(
+            dtype,
+            copy=False,
+        )
 
         return _endomorphism_from_data(
             data,
