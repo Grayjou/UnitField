@@ -139,7 +139,9 @@ def linear_vectorized_arr(
     base = np.floor(p).astype(int)
 
     # Only clip spatial dimensions
-    base = np.clip(base, 0, spatial_shape_array - 2)
+    # A singleton axis has one valid corner; use it for both interpolation
+    # corners rather than deriving a negative upper bound.
+    base = np.clip(base, 0, np.maximum(spatial_shape_array - 2, 0))
 
     frac = p - base
 

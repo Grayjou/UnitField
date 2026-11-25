@@ -34,12 +34,16 @@ def remap_tensor(
     border_config: BorderConfig | None = None,
     num_threads: int = -1,
 ) -> np.ndarray:
-    """Remap an image using unit-space coordinates via the Cython kernel.
+    """Sample an image into a destination grid using unit-space coordinates.
 
     Args:
-        src: Input array, shape (H, W) or (H, W, C).
-        map_x: X-coordinate map, shape (H, W), values in [0, 1].
-        map_y: Y-coordinate map, shape (H, W), values in [0, 1].
+        src: Input array, shape ``(source_height, source_width)`` or
+            ``(source_height, source_width, channels)``.
+        map_x: Destination-to-source X-coordinate map, shape
+            ``(destination_height, destination_width)``. Finite values outside
+            ``[0, 1]`` are handled by ``border_config``.
+        map_y: Destination-to-source Y-coordinate map with the same shape as
+            ``map_x``.
         interpolation: Interpolation mode.
             int: 0=nearest, 1=bilinear, 2=cubic, 3=lanczos3, 4=lanczos4.
             InterpMethod enum also accepted.
@@ -47,7 +51,7 @@ def remap_tensor(
         num_threads: Thread count (-1 = auto).
 
     Returns:
-        Remapped array, same shape and dtype as src.
+        Array with the map's spatial shape and ``src``'s channel shape and dtype.
     """
     from ..cython._remap_kernel import remap_tensor as _remap_core
 
@@ -70,9 +74,18 @@ def remap_tensor(
     else:
         bc = None
 
-    # Handle array-valued constant_value: convert to ARRAY mode
+    src = np.asarray(src)
+    map_x = np.asarray(map_x)
+    map_y = np.asarray(map_y)
+    if map_x.ndim != 2 or map_y.ndim != 2:
+        raise ValueError("map_x and map_y must be 2-D arrays")
+    if map_x.shape != map_y.shape:
+        raise ValueError("map_x and map_y must have the same shape")
+
+    # Handle array-valued constant_value: convert to ARRAY mode. ARRAY borders
+    # are destination-aligned, just like coordinate maps.
     if bc is not None and bc.mode == BorderMode.CONSTANT and isinstance(bc.constant_value, np.ndarray):
-        bc = _convert_constant_value_to_array(bc, src)
+        bc = _convert_constant_value_to_array(bc, src, output_shape=map_x.shape)
 
     return cast(np.ndarray, _remap_core(
         src, map_x, map_y,
@@ -90,11 +103,14 @@ def remap_tensor_1d(
     border_config: BorderConfig | None = None,
     num_threads: int = -1,
 ) -> np.ndarray:
-    """Remap a 1-D signal using unit-space coordinates via the Cython kernel.
+    """Sample a 1-D signal into a destination grid using unit coordinates.
 
     Args:
-        src: Input array, shape (N,) or (N, C).
-        map_x: Coordinate map, shape (N,), values in [0, 1].
+        src: Input array, shape ``(source_length,)`` or
+            ``(source_length, channels)``.
+        map_x: Destination-to-source coordinate map, shape
+            ``(destination_length,)``. Finite values outside ``[0, 1]`` are
+            handled by ``border_config``.
         interpolation: Interpolation mode.
             int: 0=nearest, 1=linear, 2=cubic, 3=lanczos3, 4=lanczos4.
             InterpMethod enum also accepted.
@@ -102,7 +118,7 @@ def remap_tensor_1d(
         num_threads: Thread count (-1 = auto).
 
     Returns:
-        Remapped array, same shape and dtype as src.
+        Array with the map's length and ``src``'s channel shape and dtype.
     """
     from ..cython._remap_kernel_1d import remap_tensor_1d as _remap_1d_core
 
@@ -123,8 +139,13 @@ def remap_tensor_1d(
     else:
         bc = None
 
+    src = np.asarray(src)
+    map_x = np.asarray(map_x)
+    if map_x.ndim != 1:
+        raise ValueError("map_x must be a 1-D array")
+
     if bc is not None and bc.mode == BorderMode.CONSTANT and isinstance(bc.constant_value, np.ndarray):
-        bc = _convert_constant_value_to_array_1d(bc, src)
+        bc = _convert_constant_value_to_array_1d(bc, src, output_length=map_x.shape[0])
 
     return cast(np.ndarray, _remap_1d_core(
         src, map_x,
@@ -253,13 +274,14 @@ def remap_envelope(
 
 
 def _convert_constant_value_to_array(
-    bc: BorderConfig, src: np.ndarray,
+    bc: BorderConfig, src: np.ndarray, *, output_shape: tuple[int, int] | None = None,
 ) -> BorderConfig:
     """Convert array-valued constant_value to ARRAY mode border_config."""
     arr = bc.constant_value
     if not isinstance(arr, np.ndarray):
         raise ValueError(f"Expected array-valued constant_value, got {type(arr)}")
     H, W = src.shape[0], src.shape[1]
+    output_h, output_w = (H, W) if output_shape is None else output_shape
     C = 1 if src.ndim == 2 else src.shape[2]
 
     if arr.ndim == 0:
@@ -271,7 +293,7 @@ def _convert_constant_value_to_array(
                 f"src channels {C}"
             )
         border_arr = np.broadcast_to(
-            arr.reshape(1, 1, C), (H, W, C)
+            arr.reshape(1, 1, C), (output_h, output_w, C)
         ).copy(order='C')
         return BorderConfig(
             mode=BorderMode.ARRAY, array=border_arr,
@@ -286,13 +308,13 @@ def _convert_constant_value_to_array(
             feather_dims=bc.feather_dims,
         )
     if arr.ndim == 2:
-        if arr.shape != (H, W):
+        if arr.shape != (output_h, output_w):
             raise ValueError(
                 f"constant_value 2-D shape {arr.shape} doesn't match "
-                f"src shape ({H}, {W})"
+                f"destination shape ({output_h}, {output_w})"
             )
         border_arr = np.broadcast_to(
-            arr.reshape(H, W, 1), (H, W, C)
+            arr.reshape(output_h, output_w, 1), (output_h, output_w, C)
         ).copy(order='C')
         return BorderConfig(
             mode=BorderMode.ARRAY, array=border_arr,
@@ -307,10 +329,10 @@ def _convert_constant_value_to_array(
             feather_dims=bc.feather_dims,
         )
     if arr.ndim == 3:
-        if arr.shape != (H, W, C):
+        if arr.shape != (output_h, output_w, C):
             raise ValueError(
                 f"constant_value 3-D shape {arr.shape} doesn't match "
-                f"src shape ({H}, {W}, {C})"
+                f"destination shape ({output_h}, {output_w}, {C})"
             )
         if arr.dtype != np.float64:
             arr = arr.astype(np.float64)
@@ -333,13 +355,14 @@ def _convert_constant_value_to_array(
 
 
 def _convert_constant_value_to_array_1d(
-    bc: BorderConfig, src: np.ndarray,
+    bc: BorderConfig, src: np.ndarray, *, output_length: int | None = None,
 ) -> BorderConfig:
     """Convert array-valued constant_value to ARRAY mode (1-D variant)."""
     arr = bc.constant_value
     if not isinstance(arr, np.ndarray):
         raise ValueError(f"Expected array-valued constant_value, got {type(arr)}")
     N = src.shape[0]
+    output_n = N if output_length is None else output_length
     C = 1 if src.ndim == 1 else src.shape[1]
 
     if arr.ndim == 0:
@@ -351,7 +374,7 @@ def _convert_constant_value_to_array_1d(
                 f"src channels {C}"
             )
         border_arr = np.broadcast_to(
-            arr.reshape(1, C), (N, C)
+            arr.reshape(1, C), (output_n, C)
         ).copy(order='C')
         return BorderConfig(
             mode=BorderMode.ARRAY, array=border_arr,
@@ -366,10 +389,10 @@ def _convert_constant_value_to_array_1d(
             feather_dims=bc.feather_dims,
         )
     if arr.ndim == 2:
-        if arr.shape != (N, C):
+        if arr.shape != (output_n, C):
             raise ValueError(
                 f"constant_value 2-D shape {arr.shape} doesn't match "
-                f"src shape ({N}, {C})"
+                f"destination shape ({output_n}, {C})"
             )
         if arr.dtype != np.float64:
             arr = arr.astype(np.float64)
@@ -446,6 +469,11 @@ class UnitNdimField(ABC):
 class MappedUnitField(UnitNdimField):
     """
     N-dimensional unit field with interpolation.
+
+    Sampled-field query coordinates follow NumPy spatial-axis order. For a
+    field stored as ``data[y, x]``, query it with ``(y, x)``. Vector components
+    are application-defined; a 2-D coordinate field conventionally stores
+    ``data[y, x] = (source_x, source_y)``.
 
     Parameters
     ----------
@@ -536,8 +564,7 @@ class MappedUnitField(UnitNdimField):
         Note:
             Coordinates containing inf or NaN are NOT supported and will produce
             undefined behavior. Coordinates outside [0, 1] are clipped to the
-            valid range. This design avoids overhead for the common case of
-            normalized coordinates.
+            valid range.
         """
         # Validate coordinate dimensions
         expected_dim = len(self.spatial_shape)
@@ -549,11 +576,7 @@ class MappedUnitField(UnitNdimField):
         # Convert to numpy array
         coords_array: np.ndarray = np.array(coords, dtype=DEFAULT_DTYPE).reshape(1, -1)
 
-        # Get interpolator
-        interp_func = np_interp_dict[self._interp_method]
-
-        # Interpolate
-        result = interp_func(coords_array, self._spatial_shape, self._data)
+        result = self.get_values(coords_array)
 
         # Return as tuple
         return tuple(result[0])
@@ -578,14 +601,16 @@ class MappedUnitField(UnitNdimField):
             valid range. This design avoids overhead for the common case of
             normalized coordinates.
         """
-        if coords_array.shape[-1] != self.ndim:
+        expected_dim = len(self.spatial_shape)
+        if coords_array.shape[-1] != expected_dim:
             raise ValueError(
-                f"Expected coordinates with {self.ndim} dimensions, "
+                f"Expected coordinates with {expected_dim} dimensions, "
                 f"got {coords_array.shape[-1]}"
             )
 
+        clipped_coords = np.clip(np.asarray(coords_array), 0.0, 1.0)
         interp_func = np_interp_dict[self._interp_method]
-        return cast(np.ndarray, interp_func(coords_array, self._spatial_shape, self._data))
+        return cast(np.ndarray, interp_func(clipped_coords, self._spatial_shape, self._data))
 
     def with_interp_method(self, method: InterpMethod) -> MappedUnitField:
         """
@@ -727,15 +752,13 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
         if height <= 0:
             raise ValueError(f"Height must be positive, got {height}")
 
-        # Build unit grid efficiently using broadcasting
-        xs: np.ndarray
-        ys: np.ndarray
-        xs, ys = np.meshgrid(
-            np.linspace(0, 1, width, dtype=dtype),
-            np.linspace(0, 1, height, dtype=dtype),
-            indexing='xy'
+        # Field evaluation accepts spatial-array coordinates in (y, x) order.
+        ys, xs = np.meshgrid(
+            np.linspace(0, 1, height, dtype=np.float64),
+            np.linspace(0, 1, width, dtype=np.float64),
+            indexing='ij',
         )
-        unit_grid = np.stack([xs, ys], axis=-1)
+        unit_grid = np.stack([ys, xs], axis=-1)
 
         # Evaluate the field using vectorized operation
         unit_mapping = self.get_values(unit_grid)
@@ -747,7 +770,7 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
         if height > 1:
             mapping[..., 1] *= (height - 1)
 
-        return cast(np.ndarray, mapping.astype(np.float32))
+        return cast(np.ndarray, mapping.astype(dtype, copy=False))
 
     def remap(
         self,
@@ -755,19 +778,27 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
         *,
         interpolation: int | InterpMethod = 1,
         border_config: BorderConfig | None = None,
+        output_shape: tuple[int, int] | None = None,
     ) -> np.ndarray:
         """
         Remap any (H, W, J) array using this unit endomorphism.
 
         Args:
-            data: Input array of shape (H, W, ...)
+            data: Input array of shape ``(source_height, source_width, ...)``.
             interpolation: Interpolation mode (0=nearest, 1=bilinear, ...)
             border_config: BorderConfig instance (or None for clamp default)
+            output_shape: Optional ``(destination_height, destination_width)``.
+                Defaults to the source spatial shape.
 
         Returns:
             Remapped array
         """
-        height, width = data.shape[:2]
+        source = np.asarray(data)
+        if source.ndim < 2:
+            raise ValueError(f"data must have at least two dimensions, got {source.ndim}")
+        height, width = source.shape[:2] if output_shape is None else output_shape
+        if height <= 0 or width <= 0:
+            raise ValueError(f"output_shape values must be positive, got {(height, width)}")
         # Generate unit-space mapping grid
         # Generate unit-space mapping grid in (y, x) order
         # (the numpy backend expects spatial dims first)
@@ -782,7 +813,7 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
         map_y = warped[..., 1]
 
         return remap_tensor(
-            data, map_x, map_y,
+            source, map_x, map_y,
             interpolation=interpolation,
             border_config=border_config,
         )
@@ -793,7 +824,12 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
         interp_method: InterpMethod | None = None
     ) -> Unit2DMappedEndomorphism:
         """
-        Compose this endomorphism with another.
+        Compose this endomorphism as ``other(self(q))``.
+
+        The returned field is sampled on this field's grid. This is function
+        composition, not sequential discrete tensor remapping: remapping a
+        tensor twice performs two interpolations and can differ from remapping
+        it once through the composed field.
 
         Args:
             other: Another 2D endomorphism to compose with
@@ -912,24 +948,33 @@ class Unit1DMappedEndomorphism(UnitMappedEndomorphism):
         *,
         interpolation: int | InterpMethod = 1,
         border_config: BorderConfig | None = None,
+        output_length: int | None = None,
     ) -> np.ndarray:
         """Remap any (N,) or (N, C) array using this unit endomorphism.
 
         Args:
-            data: Input array of shape (N,) or (N, ...)
+            data: Input array of shape ``(source_length,)`` or
+                ``(source_length, ...)``.
             interpolation: Interpolation mode (0=nearest, 1=linear, ...)
             border_config: BorderConfig instance (or None for clamp default)
+            output_length: Optional destination length. Defaults to the source
+                length.
 
         Returns:
             Remapped array
         """
-        n = data.shape[0]
+        source = np.asarray(data)
+        if source.ndim < 1:
+            raise ValueError(f"data must have at least one dimension, got {source.ndim}")
+        n = source.shape[0] if output_length is None else output_length
+        if n < 0:
+            raise ValueError(f"output_length must be non-negative, got {n}")
         xs = np.linspace(0, 1, n, dtype=np.float64)
         warped = self.get_values(xs[:, np.newaxis])
         map_x = warped[:, 0]
 
         return remap_tensor_1d(
-            data, map_x,
+            source, map_x,
             interpolation=interpolation,
             border_config=border_config,
         )

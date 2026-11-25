@@ -4,7 +4,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Build Status](https://github.com/Grayjou/UnitField/actions/workflows/ci.yml/badge.svg)](https://github.com/Grayjou/UnitField/actions)
 
-**UnitField** is a high-performance N-dimensional coordinate remapping library built on a Cython kernel with OpenMP parallelism. It maps unit-space coordinates ([0, 1]) through arbitrary displacement fields with configurable interpolation and border handling — purpose-built for image warping, morphing, and nonlinear coordinate transformations.
+**UnitField** is a high-performance N-dimensional coordinate remapping library built on a Cython kernel with OpenMP parallelism. It maps unit-space coordinates ([0, 1]) through arbitrary coordinate fields with configurable interpolation and border handling — purpose-built for image warping, morphing, and nonlinear coordinate transformations.
 
 ## Why UnitField?
 
@@ -14,7 +14,7 @@
 - **Multiple border modes** — CLAMP, CONSTANT, REFLECT, WRAP, REFLECT_101, and ARRAY compositing.
 - **Multiple interpolation methods** — Nearest-neighbor, bilinear, bicubic (Catmull-Rom), Lanczos-3/4.
 - **1-D signal remapping** — The same kernel operates on 1-D signals, useful for audio, time-series, and look-up table applications.
-- **Endomorphism composition** — `Unit2DMappedEndomorphism` supports composition (`f ∘ g`) for chaining transformations.
+- **Endomorphism composition** — `Unit2DMappedEndomorphism.compose(other)` evaluates `other(self(q))` for chaining transformations.
 - **Endomorphism interpolation** — `Unit1DEndoInterpolator` and `Unit2DEndoInterpolator` blend transforms over time, even when endpoint maps use different sampled sizes.
 - **Fast nearest map resize** — `resize_unit_field_nearest` upsamples or downsamples sampled remap fields for low-resolution interactive previews.
 
@@ -81,6 +81,46 @@ result = remap_tensor(
     border_config=BorderConfig.constant(0.0, feathering_width=0.1),
 )
 ```
+
+`map_x` and `map_y` are absolute, destination-to-source unit-coordinate maps.
+Their shared shape defines the output resolution independently of the source:
+
+```python
+# source: (source_height, source_width, channels)
+# map_x/map_y: (destination_height, destination_width)
+result = remap_tensor(source, map_x, map_y)
+```
+
+## Coordinate Conventions
+
+- Arrays use indexing order `array[y, x]`.
+- A 2-D coordinate field is stored as `field[y, x] = (source_x, source_y)`.
+- `MappedUnitField.get_value()` and `get_values()` receive query coordinates in
+  array-axis order: `(y, x)` for a 2-D field.
+- `remap_tensor()` receives map values in geometric order through separate
+  `map_x` and `map_y` arrays. It samples a source tensor once at every
+  destination pixel.
+- Unit coordinates are endpoint-aligned: pixel coordinate `x` maps to
+  `x / (width - 1)`. A singleton axis maps to unit coordinate zero.
+- `rasterize_mapping(width, height)` returns pixel-space `(source_x, source_y)`
+  vectors shaped `(height, width, 2)`.
+
+Use explicit utilities when exchanging numerical maps with other libraries:
+
+```python
+from unitfield import (
+    absolute_to_displacement, identity_coordinate_field, pixel_to_unit,
+    resample_coordinate_field, unit_to_pixel, xy_to_yx, yx_to_xy,
+)
+
+identity = identity_coordinate_field(width=640, height=480)
+pixel_yx = unit_to_pixel(yx_to_xy(identity), (480, 640))
+resampled_field = resample_coordinate_field(identity, width=1280, height=720)
+```
+
+`resample_coordinate_field()` interpolates coordinate values. It is distinct
+from interpolation used to evaluate a field, source-tensor remapping, and
+interpolating between two fields over time.
 
 ### Fast Preview From A Low-Resolution Map
 
@@ -166,6 +206,11 @@ Run benchmarks locally:
 ```bash
 pytest tests/ -v -m benchmark
 ```
+
+The kernel currently computes in contiguous `float64` buffers and casts the
+result back to the source dtype. This favors one interpolation implementation
+and consistent dtype restoration over a float32-specialized kernel; see
+`BENCHMARKS.md` for measured memory and timing data.
 
 ## Development
 

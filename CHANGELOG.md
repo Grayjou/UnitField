@@ -5,6 +5,30 @@ All notable changes to UnitField will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- `Unit2DMappedEndomorphism.rasterize_mapping()` now evaluates sampled fields
+  in array-axis `(y, x)` order and returns correct rectangular mappings.
+- `rasterize_mapping(dtype=...)` now honors its documented output dtype.
+- Linear interpolation of sampled fields handles singleton spatial axes.
+- `num_threads` now controls the OpenMP worker count in both remap kernels.
+
+### Added
+- 1-D and 2-D remappers support independent source and destination resolutions;
+  coordinate-map shape now defines destination shape.
+- `output_shape` and `output_length` on 2-D and 1-D mapped endomorphism
+  remapping convenience methods.
+- Public coordinate conversion, absolute/displacement conversion, identity-map,
+  and interpolating coordinate-field resampling utilities.
+
+### Migration Notes
+- Equal source/map dimensions remain supported. Existing callers need no change.
+- Array-valued borders are destination-aligned and must match the coordinate-map
+  shape when source and destination dimensions differ.
+- A caller that relied on `rasterize_mapping(dtype=np.float64)` returning
+  `float32` now receives `float64`, matching the parameter contract.
+
 ## [0.2.12] - 2026-06-29
 
 ### Added

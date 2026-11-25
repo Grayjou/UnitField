@@ -26,16 +26,24 @@ try:
 except ImportError:
     from .cython._clip_abs_fallback import clip_abs
 from .utilities import (
+    absolute_to_displacement,
+    displacement_to_absolute,
     flat_1d_pbm,
     flat_1d_upbm,
+    identity_coordinate_field,
     pbm_2d,
     pbm_ndim,
+    pixel_to_unit,
     positional_basematrix2d,
     positional_basematrix_ndim,
+    resample_coordinate_field,
     unit_positional_basematrix2d,
     unit_positional_basematrix_ndim,
+    unit_to_pixel,
     upbm_2d,
     upbm_ndim,
+    xy_to_yx,
+    yx_to_xy,
 )
 
 Unit2DEndo = Unit2DMappedEndomorphism
@@ -92,4 +100,12 @@ __all__ = [
     'upbm_ndim',
     'flat_1d_upbm',
     'flat_1d_pbm',
+    'pixel_to_unit',
+    'unit_to_pixel',
+    'xy_to_yx',
+    'yx_to_xy',
+    'identity_coordinate_field',
+    'absolute_to_displacement',
+    'displacement_to_absolute',
+    'resample_coordinate_field',
 ]

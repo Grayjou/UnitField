@@ -232,7 +232,7 @@ cdef void _remap_kernel_1d_impl(
     int feather_mode,
     const double[::1] feather_d,
     int interp_mode,
-    Py_ssize_t N, Py_ssize_t C,
+    Py_ssize_t source_n, Py_ssize_t destination_n, Py_ssize_t C, int num_threads,
 ) noexcept nogil:
     """Main 1-D remap kernel loop."""
     cdef Py_ssize_t n, ch
@@ -240,7 +240,7 @@ cdef void _remap_kernel_1d_impl(
     cdef bint oob
     cdef bint use_feather_d = feather_d.shape[0] > 0
 
-    for n in prange(N, nogil=True, schedule='static'):
+    for n in prange(destination_n, nogil=True, schedule='static', num_threads=num_threads):
         u = map_x[n]
 
         extra = 0.0
@@ -248,7 +248,7 @@ cdef void _remap_kernel_1d_impl(
 
         if (border_mode == 1 or border_mode == 5) and (oob or feather_mode == 1):
             for ch in range(C):
-                val = _sample_1ch(src[:, ch], u, N, interp_mode)
+                val = _sample_1ch(src[:, ch], u, source_n, interp_mode)
                 fw = feather_d[ch] if use_feather_d else feather_w
                 if border_mode == 1:
                     border_val = border_const
@@ -270,7 +270,7 @@ cdef void _remap_kernel_1d_impl(
                     dst[n, ch] = val + blend * (border_val - val)
         else:
             for ch in range(C):
-                dst[n, ch] = _sample_1ch(src[:, ch], u, N, interp_mode)
+                dst[n, ch] = _sample_1ch(src[:, ch], u, source_n, interp_mode)
 
 
 # ---------------------------------------------------------------------------
@@ -293,21 +293,23 @@ def remap_tensor_1d(
     """Remap a 1-D signal using unit-space coordinates.
 
     Args:
-        src: Input array, shape (N,) or (N, C). float64 preferred.
-        map_x: Coordinate map, shape (N,), values in [0, 1].
+        src: Input array, shape (source_length,) or (source_length, channels).
+        map_x: Destination-to-source coordinate map, shape (destination_length,).
         interpolation: 0=nearest, 1=linear, 2=cubic, 3=lanczos3, 4=lanczos4.
         border_config: BorderConfig instance (or None for clamp default).
         num_threads: Thread count (-1 = auto).
 
     Returns:
-        Remapped array, same shape and dtype as src.
+        Array with map length, src channels, and src dtype.
     """
     if src.ndim < 1 or src.ndim > 2:
         raise ValueError(f"src must be 1-D or 2-D, got ndim={src.ndim}")
     if map_x.ndim != 1:
         raise ValueError("map_x must be 1-dimensional")
-    if len(src) != len(map_x):
-        raise ValueError("src and map_x must have the same length")
+    if len(src) == 0 and len(map_x) != 0:
+        raise ValueError("cannot sample a non-empty destination from an empty src")
+    if not np.isfinite(map_x).all():
+        raise ValueError("map_x must contain only finite coordinates")
 
     from ..core.border_config import BorderConfig, compute_feather_d
     from ..core.enums import BorderMode
@@ -322,17 +324,27 @@ def remap_tensor_1d(
         src_contig = src_contig[:, np.newaxis]
     mx = np.ascontiguousarray(map_x, dtype=np.float64)
 
-    N = len(src)
+    source_n = len(src)
+    destination_n = len(map_x)
     C = 1 if src.ndim == 1 else src.shape[1]
-    dst = np.empty((N, C), dtype=np.float64)
+    dst = np.empty((destination_n, C), dtype=np.float64)
 
     border_array = np.empty((0, 0), dtype=np.float64)
-    if bc.mode == BorderMode.ARRAY and bc.array is not None:
+    if bc.mode == BorderMode.ARRAY:
+        if bc.array is None:
+            raise ValueError("ARRAY mode requires a border_array")
         ba = np.ascontiguousarray(bc.array, dtype=np.float64)
         if ba.ndim == 1:
             border_array = ba[:, np.newaxis]
-        else:
+        elif ba.ndim == 2:
             border_array = ba
+        else:
+            raise ValueError(f"border_array must be 1-D or 2-D, got {ba.ndim}-D")
+        if border_array.shape != (destination_n, C):
+            raise ValueError(
+                f"border_array shape {border_array.shape} must match destination "
+                f"shape ({destination_n}, {C})"
+            )
 
     feather_d = compute_feather_d(bc, C)
 
@@ -354,7 +366,7 @@ def remap_tensor_1d(
         bc.feathering_mode.value,
         feather_d,
         interpolation,
-        N, C,
+        source_n, destination_n, C, nthreads,
     )
 
     if src.ndim == 1:

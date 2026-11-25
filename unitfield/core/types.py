@@ -9,8 +9,9 @@ import numpy as np
 from boundednumbers import UnitFloat
 from numpy.typing import NDArray
 
-# Unit array type (values in [0, 1])
-UnitArray: TypeAlias = Annotated[NDArray[np.floating], "values in [0, 1]"]
+# Sampled coordinate/vector array. Values may leave [0, 1] when a caller wants
+# remapping border behavior; this alias is descriptive rather than validating.
+UnitArray: TypeAlias = Annotated[NDArray[np.floating], "sampled coordinate/vector values"]
 
 # Unit space vector types
 UnitSpaceVector: TypeAlias = UnitArray | tuple[UnitFloat, ...] | list[UnitFloat]
@@ -18,6 +19,10 @@ UnitSpaceVector: TypeAlias = UnitArray | tuple[UnitFloat, ...] | list[UnitFloat]
 # Type aliases for clarity
 Coordinate: TypeAlias = tuple[UnitFloat, ...]
 PixelCoordinate: TypeAlias = tuple[float, ...]
+# Query coordinates for sampled fields follow NumPy spatial-axis order, e.g.
+# (y, x), while coordinate-field values conventionally use geometric (x, y).
+AxisCoordinate: TypeAlias = Coordinate
+XYCoordinate: TypeAlias = tuple[UnitFloat, UnitFloat]
 ImageShape: TypeAlias = tuple[int, int]
 
 # Constants

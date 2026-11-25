@@ -94,12 +94,12 @@ class TestRemapNumerical:
 class TestRemapValidation:
     """Input validation."""
 
-    def test_shape_mismatch_raises(self):
+    def test_destination_shape_is_defined_by_maps(self):
         src = np.random.rand(10, 10, 3).astype(np.float64)
         mx = np.random.rand(5, 5).astype(np.float64)
         my = np.random.rand(5, 5).astype(np.float64)
-        with pytest.raises(ValueError, match="must match"):
-            remap_tensor(src, mx, my)
+        result = remap_tensor(src, mx, my)
+        assert result.shape == (5, 5, 3)
 
     def test_empty_raises(self):
         with pytest.raises(ValueError, match="non-zero"):

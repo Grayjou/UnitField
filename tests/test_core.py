@@ -491,9 +491,9 @@ class TestUnit2DMappedEndomorphism:
             interp_method=InterpMethod.LINEAR
         )
 
-        # Test with float64
+        # The requested dtype controls the rasterized mapping dtype.
         mapping = endo.rasterize_mapping(10, 10, dtype=np.float64)
-        assert mapping.dtype == np.float32  # Should be converted to float32 at the end
+        assert mapping.dtype == np.float64
 
         # Test with float32 (default)
         mapping = endo.rasterize_mapping(10, 10, dtype=np.float32)

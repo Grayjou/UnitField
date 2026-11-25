@@ -115,9 +115,9 @@ class TestRemapTensor1D:
         out = remap_tensor_1d(np.array([]), np.array([]))
         assert out.shape == (0,)
 
-    def test_shape_mismatch_raises(self):
-        with pytest.raises(ValueError):
-            remap_tensor_1d(np.ones(10), np.ones(5))
+    def test_destination_length_is_defined_by_map(self):
+        result = remap_tensor_1d(np.ones(10), np.ones(5))
+        assert result.shape == (5,)
 
 
 # ---------------------------------------------------------------------------

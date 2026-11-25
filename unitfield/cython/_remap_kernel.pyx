@@ -214,7 +214,9 @@ cdef void _remap_kernel_impl(
     int preserve_non_feather_dims,
     const double[::1] feather_d,
     int interp_mode,
-    Py_ssize_t H, Py_ssize_t W, Py_ssize_t C,
+    Py_ssize_t source_h, Py_ssize_t source_w,
+    Py_ssize_t destination_h, Py_ssize_t destination_w, Py_ssize_t C,
+    int num_threads,
 ) noexcept nogil:
     """Main 2-D remap kernel loop.
 
@@ -226,8 +228,8 @@ cdef void _remap_kernel_impl(
     cdef bint oob
     cdef bint use_feather_d = feather_d.shape[0] > 0
 
-    for h in prange(H, nogil=True, schedule='static'):
-        for w in range(W):
+    for h in prange(destination_h, nogil=True, schedule='static', num_threads=num_threads):
+        for w in range(destination_w):
             u_x = map_x[h, w]
             u_y = map_y[h, w]
 
@@ -237,7 +239,7 @@ cdef void _remap_kernel_impl(
 
             if (border_mode == 1 or border_mode == 5) and (oob or feather_mode == 1):
                 for ch in range(C):
-                    val = _sample_1ch(src, u_x, u_y, ch, H, W, interp_mode)
+                    val = _sample_1ch(src, u_x, u_y, ch, source_h, source_w, interp_mode)
                     fw = feather_d[ch] if use_feather_d else feather_w
                     if border_mode == 1:
                         border_val = border_const
@@ -263,7 +265,7 @@ cdef void _remap_kernel_impl(
                         dst[h, w, ch] = val + blend * (border_val - val)
             else:
                 for ch in range(C):
-                    dst[h, w, ch] = _sample_1ch(src, u_x, u_y, ch, H, W, interp_mode)
+                    dst[h, w, ch] = _sample_1ch(src, u_x, u_y, ch, source_h, source_w, interp_mode)
 
 
 # ---------------------------------------------------------------------------
@@ -295,28 +297,27 @@ def remap_tensor(
     """Remap an image using unit-space coordinates.
 
     Args:
-        src: Input array, shape (H, W) or (H, W, C). float64 preferred.
-        map_x: X-coordinate map, shape (H, W), values in [0, 1].
-        map_y: Y-coordinate map, shape (H, W), values in [0, 1].
+        src: Input array, shape (source_height, source_width[, channels]).
+        map_x: Destination-to-source X-coordinate map, shape
+            (destination_height, destination_width).
+        map_y: Destination-to-source Y-coordinate map, same shape as map_x.
         interpolation: Interpolation mode (0=nearest, 1=bilinear).
         border_config: BorderConfig instance (or None for clamp default).
         num_threads: Thread count (-1 = auto).
 
     Returns:
-        Remapped array, same shape and dtype as src.
+        Array with map spatial shape, src channels, and src dtype.
     """
-    if src.ndim < 2:
-        raise ValueError(f"src must be at least 2-dimensional, got ndim={src.ndim}")
+    if src.ndim not in (2, 3):
+        raise ValueError(f"src must be 2-D or 3-D, got ndim={src.ndim}")
     if map_x.ndim != 2 or map_y.ndim != 2:
         raise ValueError("map_x and map_y must be 2-dimensional")
     if map_x.shape != map_y.shape:
         raise ValueError("map_x and map_y must have the same shape")
-    if src.shape[0] != map_x.shape[0] or src.shape[1] != map_x.shape[1]:
-        raise ValueError(
-            f"src shape {src.shape[:2]} and map shape {map_x.shape} must match"
-        )
     if src.shape[0] == 0 or src.shape[1] == 0:
         raise ValueError("src must have non-zero spatial dimensions")
+    if not np.isfinite(map_x).all() or not np.isfinite(map_y).all():
+        raise ValueError("map_x and map_y must contain only finite coordinates")
 
     from ._zero_sign import ZERO_SIGN as _ZS  # noqa: avoid unused import issue
     from ..core.border_config import BorderConfig, compute_feather_d
@@ -332,10 +333,10 @@ def remap_tensor(
     if bc.mode == BorderMode.ARRAY:
         if bc.array is None:
             raise ValueError("ARRAY mode requires a border_array")
-        if bc.array.shape[:2] != src.shape[:2]:
+        if bc.array.shape[:2] != map_x.shape:
             raise ValueError(
                 f"border_array shape {bc.array.shape[:2]} must match "
-                f"src shape {src.shape[:2]}"
+                f"destination shape {map_x.shape}"
             )
         C_src = 1 if src.ndim == 2 else src.shape[2]
         arr_ndim = bc.array.ndim
@@ -355,10 +356,11 @@ def remap_tensor(
     mx = np.ascontiguousarray(map_x, dtype=np.float64)
     my = np.ascontiguousarray(map_y, dtype=np.float64)
 
-    H, W = src.shape[0], src.shape[1]
+    source_h, source_w = src.shape[0], src.shape[1]
+    destination_h, destination_w = map_x.shape
     C = 1 if src.ndim == 2 else src.shape[2]
 
-    dst = np.empty((H, W, C), dtype=np.float64)
+    dst = np.empty((destination_h, destination_w, C), dtype=np.float64)
 
     border_array = np.empty((0, 0, 0), dtype=np.float64)
     if bc.mode == BorderMode.ARRAY and bc.array is not None:
@@ -388,9 +390,9 @@ def remap_tensor(
         1 if bc.preserve_non_feather_dims else 0,
         feather_d,
         interpolation,
-        H, W, C,
+        source_h, source_w, destination_h, destination_w, C, nthreads,
     )
 
     if src.ndim == 2:
-        return dst.reshape(H, W).astype(src.dtype, copy=False)
+        return dst.reshape(destination_h, destination_w).astype(src.dtype, copy=False)
     return dst.astype(src.dtype, copy=False)

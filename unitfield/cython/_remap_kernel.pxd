@@ -19,5 +19,7 @@ cdef void _remap_kernel_impl(
     int preserve_non_feather_dims,
     const double[::1] feather_d,
     int interp_mode,
-    Py_ssize_t H, Py_ssize_t W, Py_ssize_t C,
+    Py_ssize_t source_h, Py_ssize_t source_w,
+    Py_ssize_t destination_h, Py_ssize_t destination_w, Py_ssize_t C,
+    int num_threads,
 ) noexcept nogil
