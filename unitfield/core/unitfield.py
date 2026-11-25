@@ -731,7 +731,8 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
         width: int,
         height: int,
         *,
-        dtype: type = DEFAULT_DTYPE
+        dtype: type = DEFAULT_DTYPE,
+        source_shape: tuple[int, int] | None = None,
     ) -> np.ndarray:
         """
         Rasterize the unit endomorphism into a pixel-space mapping.
@@ -740,6 +741,9 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
             width: Output width in pixels
             height: Output height in pixels
             dtype: Data type for output mapping
+            source_shape: Optional ``(source_height, source_width)`` used to
+                convert absolute unit coordinates to pixel coordinates. Defaults
+                to ``(height, width)`` for backward compatibility.
 
         Returns:
             Pixel-space mapping of shape (H, W, 2)
@@ -747,10 +751,27 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
         Raises:
             ValueError: If width or height are invalid
         """
+        if isinstance(width, (bool, np.bool_)) or not isinstance(width, (int, np.integer)):
+            raise TypeError(f"Width must be an integer, got {type(width)}")
+        if isinstance(height, (bool, np.bool_)) or not isinstance(height, (int, np.integer)):
+            raise TypeError(f"Height must be an integer, got {type(height)}")
         if width <= 0:
             raise ValueError(f"Width must be positive, got {width}")
         if height <= 0:
             raise ValueError(f"Height must be positive, got {height}")
+        if source_shape is None:
+            source_height, source_width = height, width
+        else:
+            if len(source_shape) != 2:
+                raise ValueError(f"source_shape must be (height, width), got {source_shape}")
+            source_height, source_width = source_shape
+            if any(
+                isinstance(size, (bool, np.bool_)) or not isinstance(size, (int, np.integer))
+                for size in source_shape
+            ):
+                raise TypeError(f"source_shape values must be integers, got {source_shape}")
+            if source_height <= 0 or source_width <= 0:
+                raise ValueError(f"source_shape values must be positive, got {source_shape}")
 
         # Field evaluation accepts spatial-array coordinates in (y, x) order.
         ys, xs = np.meshgrid(
@@ -763,12 +784,11 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
         # Evaluate the field using vectorized operation
         unit_mapping = self.get_values(unit_grid)
 
-        # Convert unit → pixel
+        # Convert unit -> source pixels. Singleton source axes have one pixel,
+        # so all unit coordinates map to zero, matching unit_to_pixel().
         mapping = unit_mapping.copy()
-        if width > 1:
-            mapping[..., 0] *= (width - 1)
-        if height > 1:
-            mapping[..., 1] *= (height - 1)
+        mapping[..., 0] *= source_width - 1
+        mapping[..., 1] *= source_height - 1
 
         return cast(np.ndarray, mapping.astype(dtype, copy=False))
 
@@ -829,7 +849,12 @@ class Unit2DMappedEndomorphism(UnitMappedEndomorphism):
         The returned field is sampled on this field's grid. This is function
         composition, not sequential discrete tensor remapping: remapping a
         tensor twice performs two interpolations and can differ from remapping
-        it once through the composed field.
+        it once through the composed field. Sampled-field evaluation clips
+        queries to ``[0, 1]``. Consequently, if this field produces an
+        out-of-domain intermediate coordinate, ``other`` is evaluated at its
+        boundary rather than outside its sampled domain. This differs from an
+        unrestricted analytic composition and from sequential remapping with a
+        source border policy.
 
         Args:
             other: Another 2D endomorphism to compose with

@@ -62,7 +62,7 @@ UNDField = UnitNdimField
 MUnitField = MappedUnitField
 
 
-__version__ = "0.2.12"
+__version__ = "0.3.0"
 __all__ = [
     'InterpMethod',
     'BorderMode',

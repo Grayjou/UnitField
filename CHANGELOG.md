@@ -5,12 +5,15 @@ All notable changes to UnitField will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-11-25
 
 ### Fixed
 - `Unit2DMappedEndomorphism.rasterize_mapping()` now evaluates sampled fields
   in array-axis `(y, x)` order and returns correct rectangular mappings.
 - `rasterize_mapping(dtype=...)` now honors its documented output dtype.
+- Singleton source axes in `rasterize_mapping()` now always rasterize to pixel
+  coordinate zero, including nonidentity fields.
+- Package import no longer requires the optional OpenCV comparison backend.
 - Linear interpolation of sampled fields handles singleton spatial axes.
 - `num_threads` now controls the OpenMP worker count in both remap kernels.
 
@@ -21,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   remapping convenience methods.
 - Public coordinate conversion, absolute/displacement conversion, identity-map,
   and interpolating coordinate-field resampling utilities.
+- `rasterize_mapping(..., source_shape=(source_height, source_width))` for
+  rasterizing a field onto a destination grid in a separately sized source.
 
 ### Migration Notes
 - Equal source/map dimensions remain supported. Existing callers need no change.
@@ -28,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shape when source and destination dimensions differ.
 - A caller that relied on `rasterize_mapping(dtype=np.float64)` returning
   `float32` now receives `float64`, matching the parameter contract.
+- Coordinate utilities now reject nonfinite inputs and nonfloating identity or
+  requested output dtypes. Integer coordinate-vector inputs remain supported
+  and convert to `float64`.
 
 ## [0.2.12] - 2026-06-29
 
@@ -114,3 +122,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.2.0]: https://github.com/Grayjou/UnitField/releases/tag/v0.2.0
 [0.2.11]: https://github.com/Grayjou/UnitField/releases/tag/v0.2.11
 [0.2.12]: https://github.com/Grayjou/UnitField/releases/tag/v0.2.12
+[0.3.0]: https://github.com/Grayjou/UnitField/releases/tag/v0.3.0

@@ -14,7 +14,7 @@
 - **Multiple border modes** — CLAMP, CONSTANT, REFLECT, WRAP, REFLECT_101, and ARRAY compositing.
 - **Multiple interpolation methods** — Nearest-neighbor, bilinear, bicubic (Catmull-Rom), Lanczos-3/4.
 - **1-D signal remapping** — The same kernel operates on 1-D signals, useful for audio, time-series, and look-up table applications.
-- **Endomorphism composition** — `Unit2DMappedEndomorphism.compose(other)` evaluates `other(self(q))` for chaining transformations.
+- **Endomorphism composition** — `Unit2DMappedEndomorphism.compose(other)` evaluates `other(self(q))` for chaining transformations; sampled fields clip intermediate queries to their unit-domain boundary.
 - **Endomorphism interpolation** — `Unit1DEndoInterpolator` and `Unit2DEndoInterpolator` blend transforms over time, even when endpoint maps use different sampled sizes.
 - **Fast nearest map resize** — `resize_unit_field_nearest` upsamples or downsamples sampled remap fields for low-resolution interactive previews.
 
@@ -102,8 +102,12 @@ result = remap_tensor(source, map_x, map_y)
   destination pixel.
 - Unit coordinates are endpoint-aligned: pixel coordinate `x` maps to
   `x / (width - 1)`. A singleton axis maps to unit coordinate zero.
-- `rasterize_mapping(width, height)` returns pixel-space `(source_x, source_y)`
-  vectors shaped `(height, width, 2)`.
+- `rasterize_mapping(width, height, source_shape=(Hs, Ws))` returns pixel-space
+  `(source_x, source_y)` vectors shaped `(height, width, 2)`. Without
+  `source_shape`, source and destination raster dimensions are the same.
+- Coordinate utility inputs must be real and finite. Integer coordinate vectors
+  are converted to `float64`; identity-map and requested resampling output
+  dtypes must be floating point to avoid normalized-coordinate truncation.
 
 Use explicit utilities when exchanging numerical maps with other libraries:
 

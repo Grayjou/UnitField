@@ -59,6 +59,30 @@ def test_rasterize_dtype_is_output_conversion_not_grid_precision():
     np.testing.assert_array_equal(mapping, np.stack((xs, ys), axis=-1))
 
 
+def test_rasterize_singleton_source_axes_zero_nonidentity_components():
+    field = np.empty((2, 3, 2), dtype=np.float64)
+    field[..., 0] = 0.75
+    field[..., 1] = 0.25
+    endomorphism = Unit2DMappedEndomorphism(field, InterpMethod.LINEAR)
+
+    width_singleton = endomorphism.rasterize_mapping(5, 4, source_shape=(4, 1))
+    height_singleton = endomorphism.rasterize_mapping(5, 4, source_shape=(1, 5))
+
+    np.testing.assert_array_equal(width_singleton[..., 0], 0.0)
+    np.testing.assert_array_equal(height_singleton[..., 1], 0.0)
+    np.testing.assert_allclose(width_singleton[..., 1], 0.75)
+    np.testing.assert_allclose(height_singleton[..., 0], 3.0)
+
+
+def test_rasterize_source_shape_is_independent_from_destination_shape():
+    field = identity_coordinate_field(3, 2, dtype=np.float64)
+    endomorphism = Unit2DMappedEndomorphism(field, InterpMethod.LINEAR)
+
+    mapping = endomorphism.rasterize_mapping(7, 5, source_shape=(3, 11), dtype=np.float64)
+    ys, xs = np.meshgrid(np.linspace(0.0, 1.0, 5), np.linspace(0.0, 1.0, 7), indexing="ij")
+    np.testing.assert_allclose(mapping, np.stack((xs * 10, ys * 2), axis=-1), atol=1e-12)
+
+
 @pytest.mark.parametrize("shape", [(1, 5), (4, 1), (1, 1)])
 def test_rasterize_identity_singleton_axes(shape):
     height, width = shape
@@ -82,6 +106,14 @@ def test_remap_2d_independent_source_destination_shape(interpolation):
     np.testing.assert_allclose(
         result[[0, -1]][:, [0, -1]], source[[0, -1]][:, [0, -1]], atol=1e-12
     )
+
+
+def test_different_resolution_linear_remap_has_exact_affine_values():
+    source = (10 * np.arange(3)[:, None] + np.arange(5)[None, :]).astype(np.float64)
+    ys, xs = np.meshgrid(np.linspace(0, 1, 7), np.linspace(0, 1, 9), indexing="ij")
+    result = remap_tensor(source, xs, ys, interpolation=InterpMethod.LINEAR)
+    expected = 20 * ys + 4 * xs
+    np.testing.assert_allclose(result, expected, atol=1e-12)
 
 
 def test_remap_2d_destination_shape_with_channels_noncontiguous_and_array_border():
@@ -112,6 +144,27 @@ def test_remap_2d_independent_shape_supports_scalar_border_modes(border_config):
     result = remap_tensor(source, map_x, map_y, border_config=border_config)
     assert result.shape == (4, 5)
     assert np.isfinite(result).all()
+
+
+def test_different_resolution_border_and_feather_values_are_exact():
+    source = (10 * np.arange(2)[:, None] + np.arange(3)[None, :]).astype(np.float64)
+    map_x = np.full((4, 5), -0.25)
+    map_y = np.full((4, 5), 0.5)
+
+    constant = remap_tensor(source, map_x, map_y, border_config=BorderConfig.constant(-3.0))
+    reflected = remap_tensor(
+        source, map_x, map_y, border_config=BorderConfig(mode=BorderMode.REFLECT)
+    )
+    feathered = remap_tensor(
+        np.full((2, 3), 10.0),
+        np.full((4, 5), -0.1),
+        np.full((4, 5), 0.5),
+        border_config=BorderConfig.constant(0.0, feathering_width=0.2),
+    )
+
+    np.testing.assert_array_equal(constant, np.full((4, 5), -3.0))
+    np.testing.assert_allclose(reflected, np.full((4, 5), 5.5), atol=1e-12)
+    np.testing.assert_allclose(feathered, np.full((4, 5), 5.0), atol=1e-12)
 
 
 @pytest.mark.parametrize("interpolation", range(5))
@@ -172,6 +225,27 @@ def test_coordinate_conversion_and_displacement_round_trips():
     np.testing.assert_allclose(displacement_to_absolute(absolute_to_displacement(absolute)), absolute)
 
 
+def test_coordinate_utilities_validate_malformed_nonfinite_and_integer_inputs():
+    np.testing.assert_array_equal(pixel_to_unit(np.array([[0, 4]], dtype=np.uint8), (3, 5)), [[0, 1]])
+    np.testing.assert_array_equal(unit_to_pixel(np.array([[1, 1]], dtype=np.uint16), (3, 5)), [[2, 4]])
+
+    for coords in (np.array(0.5), np.array([[0.5, 0.5, 0.5]]), np.array([[np.nan, 0.5]])):
+        with pytest.raises((TypeError, ValueError)):
+            pixel_to_unit(coords, (3, 5))
+    with pytest.raises(TypeError):
+        unit_to_pixel(np.array([[0.5, 0.5]]), (3.0, 5))
+    with pytest.raises(ValueError):
+        identity_coordinate_field(0, 3)
+    with pytest.raises(TypeError):
+        identity_coordinate_field(3, 2, dtype=np.uint8)
+    with pytest.raises(ValueError):
+        absolute_to_displacement(np.empty((0, 3, 2), dtype=np.float64))
+    with pytest.raises(ValueError):
+        displacement_to_absolute(np.full((2, 3, 2), np.inf))
+    with pytest.raises(TypeError):
+        resample_coordinate_field(identity_coordinate_field(3, 2), 4, 3, dtype=np.uint8)
+
+
 def test_resample_coordinate_field_preserves_affine_field():
     identity = identity_coordinate_field(3, 2, dtype=np.float64)
     field = np.stack((0.2 + 0.6 * identity[..., 0], 0.1 + 0.7 * identity[..., 1]), axis=-1)
@@ -193,3 +267,46 @@ def test_compose_is_other_after_self_for_noncommuting_fields():
     composed = first.compose(second)
     coordinate = np.array([[[0.5, 0.5]]])  # query order is (y, x)
     np.testing.assert_allclose(composed.get_values(coordinate), [[[0.3, 0.5]]], atol=1e-12)
+
+
+def test_composition_clips_out_of_domain_intermediate_coordinates():
+    first_data = np.empty((3, 4, 2), dtype=np.float64)
+    first_data[..., 0] = 1.2
+    first_data[..., 1] = 0.5
+    first = Unit2DMappedEndomorphism(first_data, InterpMethod.LINEAR)
+    second = Unit2DMappedEndomorphism(identity_coordinate_field(7, 5), InterpMethod.LINEAR)
+
+    composed = first.compose(second)
+    np.testing.assert_allclose(composed.data, np.full((3, 4, 2), [1.0, 0.5]), atol=1e-12)
+
+    source = np.arange(12, dtype=np.float64).reshape(3, 4)
+    direct = first.remap(source, border_config=BorderConfig.constant(-1.0))
+    composed_render = composed.remap(source, border_config=BorderConfig.constant(-1.0))
+    np.testing.assert_array_equal(direct, np.full((3, 4), -1.0))
+    np.testing.assert_array_equal(composed_render, np.full((3, 4), source[1, -1]))
+
+
+def test_composition_across_resolutions_has_exact_affine_values():
+    first_identity = identity_coordinate_field(4, 3, dtype=np.float64)
+    second_identity = identity_coordinate_field(7, 5, dtype=np.float64)
+    first = first_identity.copy()
+    first[..., 0] = 0.1 + 0.5 * first_identity[..., 0]
+    second = second_identity.copy()
+    second[..., 0] = 0.2 + 0.5 * second_identity[..., 0]
+
+    composed = Unit2DMappedEndomorphism(first, InterpMethod.LINEAR).compose(
+        Unit2DMappedEndomorphism(second, InterpMethod.LINEAR)
+    )
+    expected = first.copy()
+    expected[..., 0] = 0.25 + 0.25 * first_identity[..., 0]
+    np.testing.assert_allclose(composed.data, expected, atol=1e-12)
+
+
+def test_remap_is_deterministic_across_thread_counts():
+    rng = np.random.default_rng(1234)
+    source = rng.random((37, 29, 3))
+    map_y, map_x = np.meshgrid(np.linspace(-0.1, 1.1, 31), np.linspace(-0.1, 1.1, 41), indexing="ij")
+    border = BorderConfig.constant(0.25, feathering_width=0.15)
+    single = remap_tensor(source, map_x, map_y, border_config=border, num_threads=1)
+    parallel = remap_tensor(source, map_x, map_y, border_config=border, num_threads=2)
+    np.testing.assert_array_equal(single, parallel)

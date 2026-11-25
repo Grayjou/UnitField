@@ -7,10 +7,48 @@ import numpy as np
 from ..core.enums import InterpMethod
 
 
-def _shape_scale(spatial_shape: tuple[int, ...]) -> np.ndarray:
-    if not spatial_shape or any(size <= 0 for size in spatial_shape):
-        raise ValueError(f"spatial_shape must contain positive dimensions, got {spatial_shape}")
-    return np.maximum(np.asarray(spatial_shape, dtype=np.float64) - 1.0, 1.0)
+def _validate_shape(spatial_shape: tuple[int, ...]) -> np.ndarray:
+    try:
+        shape = tuple(spatial_shape)
+    except TypeError as exc:
+        raise TypeError("spatial_shape must be an iterable of positive integers") from exc
+    if not shape:
+        raise ValueError("spatial_shape must contain at least one dimension")
+    if any(isinstance(size, (bool, np.bool_)) or not isinstance(size, (int, np.integer)) for size in shape):
+        raise TypeError(f"spatial_shape must contain integers, got {shape}")
+    if any(size <= 0 for size in shape):
+        raise ValueError(f"spatial_shape must contain positive dimensions, got {shape}")
+    return np.asarray(shape, dtype=np.intp)
+
+
+def _validate_real_finite(values: np.ndarray, *, name: str, vector_size: int | None = None) -> np.ndarray:
+    if values.ndim == 0:
+        raise ValueError(f"{name} must contain coordinate vectors, not a scalar")
+    if vector_size is not None and values.shape[-1] != vector_size:
+        raise ValueError(f"{name} dimension {values.shape[-1]} does not match {vector_size}")
+    if values.dtype.kind not in "iuf":
+        raise TypeError(f"{name} must have a real numeric dtype, got {values.dtype}")
+    result = values.astype(np.float64, copy=False)
+    if not np.isfinite(result).all():
+        raise ValueError(f"{name} must contain only finite values")
+    return result
+
+
+def _validate_float_dtype(dtype: np.dtype | type, *, name: str) -> np.dtype:
+    result = np.dtype(dtype)
+    if result.kind != "f":
+        raise TypeError(f"{name} must be a real floating-point dtype, got {result}")
+    return result
+
+
+def _validate_resolution(width: int, height: int) -> tuple[int, int]:
+    if isinstance(width, (bool, np.bool_)) or not isinstance(width, (int, np.integer)):
+        raise TypeError(f"width must be an integer, got {type(width)}")
+    if isinstance(height, (bool, np.bool_)) or not isinstance(height, (int, np.integer)):
+        raise TypeError(f"height must be an integer, got {type(height)}")
+    if width <= 0 or height <= 0:
+        raise ValueError(f"width and height must be positive, got {(width, height)}")
+    return int(width), int(height)
 
 
 def pixel_to_unit(coords: np.ndarray, spatial_shape: tuple[int, ...]) -> np.ndarray:
@@ -18,15 +56,15 @@ def pixel_to_unit(coords: np.ndarray, spatial_shape: tuple[int, ...]) -> np.ndar
 
     Coordinate vectors use NumPy axis order. A singleton axis maps its sole
     pixel to unit coordinate zero; inputs on that axis therefore map to zero.
-    Empty dimensions are rejected. This function neither clips nor validates
-    finite values, so out-of-domain coordinates round-trip predictably.
+    Empty dimensions and nonfinite coordinates are rejected. Finite
+    out-of-domain coordinates are not clipped, so border-aware values can
+    round-trip predictably. Integer and unsigned inputs are accepted and
+    converted to float64.
     """
-    values = np.asarray(coords)
-    sizes = np.asarray(spatial_shape, dtype=np.intp)
-    scale = _shape_scale(tuple(spatial_shape))
-    if values.shape[-1] != scale.size:
-        raise ValueError(f"coordinate dimension {values.shape[-1]} does not match {scale.size}")
-    result = np.asarray(values, dtype=np.result_type(values, np.float64)) / scale
+    sizes = _validate_shape(spatial_shape)
+    values = _validate_real_finite(np.asarray(coords), name="coords", vector_size=sizes.size)
+    scale = np.maximum(sizes.astype(np.float64) - 1.0, 1.0)
+    result = values / scale
     return np.where(sizes == 1, 0.0, result)
 
 
@@ -36,20 +74,16 @@ def unit_to_pixel(coords: np.ndarray, spatial_shape: tuple[int, ...]) -> np.ndar
     Singleton axes always convert to zero. Inputs are not clipped, which keeps
     this suitable for converting border-handled out-of-domain coordinates.
     """
-    values = np.asarray(coords)
-    sizes = np.asarray(spatial_shape, dtype=np.intp)
-    scale = _shape_scale(tuple(spatial_shape))
-    if values.shape[-1] != scale.size:
-        raise ValueError(f"coordinate dimension {values.shape[-1]} does not match {scale.size}")
-    result = np.asarray(values, dtype=np.result_type(values, np.float64)) * scale
+    sizes = _validate_shape(spatial_shape)
+    values = _validate_real_finite(np.asarray(coords), name="coords", vector_size=sizes.size)
+    scale = np.maximum(sizes.astype(np.float64) - 1.0, 1.0)
+    result = values * scale
     return np.where(sizes == 1, 0.0, result)
 
 
 def xy_to_yx(coords: np.ndarray) -> np.ndarray:
     """Return 2-D coordinate vectors reordered from geometric ``(x, y)`` to ``(y, x)``."""
-    values = np.asarray(coords)
-    if values.shape[-1] != 2:
-        raise ValueError(f"expected coordinate vectors with length 2, got {values.shape[-1]}")
+    values = _validate_real_finite(np.asarray(coords), name="coords", vector_size=2)
     return values[..., ::-1]
 
 
@@ -59,9 +93,9 @@ def yx_to_xy(coords: np.ndarray) -> np.ndarray:
 
 
 def identity_coordinate_field(width: int, height: int, *, dtype=np.float32) -> np.ndarray:
-    """Create ``field[y, x] = (x_unit, y_unit)`` at the requested resolution."""
-    if width <= 0 or height <= 0:
-        raise ValueError(f"width and height must be positive, got {(width, height)}")
+    """Create a finite floating ``field[y, x] = (x_unit, y_unit)`` identity map."""
+    width, height = _validate_resolution(width, height)
+    dtype = _validate_float_dtype(dtype, name="dtype")
     ys, xs = np.meshgrid(
         np.linspace(0.0, 1.0, height, dtype=dtype),
         np.linspace(0.0, 1.0, width, dtype=dtype),
@@ -72,19 +106,19 @@ def identity_coordinate_field(width: int, height: int, *, dtype=np.float32) -> n
 
 def absolute_to_displacement(field: np.ndarray) -> np.ndarray:
     """Convert an absolute 2-D ``(source_x, source_y)`` field to displacement."""
-    values = np.asarray(field)
+    values = _validate_real_finite(np.asarray(field), name="field", vector_size=2)
     if values.ndim != 3 or values.shape[-1] != 2:
         raise ValueError(f"field must have shape (height, width, 2), got {values.shape}")
-    identity = identity_coordinate_field(values.shape[1], values.shape[0], dtype=values.dtype)
+    identity = identity_coordinate_field(values.shape[1], values.shape[0], dtype=np.float64)
     return values - identity
 
 
 def displacement_to_absolute(displacement: np.ndarray) -> np.ndarray:
     """Convert a 2-D displacement field to absolute ``(source_x, source_y)`` coordinates."""
-    values = np.asarray(displacement)
+    values = _validate_real_finite(np.asarray(displacement), name="displacement", vector_size=2)
     if values.ndim != 3 or values.shape[-1] != 2:
         raise ValueError(f"displacement must have shape (height, width, 2), got {values.shape}")
-    identity = identity_coordinate_field(values.shape[1], values.shape[0], dtype=values.dtype)
+    identity = identity_coordinate_field(values.shape[1], values.shape[0], dtype=np.float64)
     return values + identity
 
 
@@ -103,12 +137,12 @@ def resample_coordinate_field(
     """
     from ..core.unitfield import Unit2DMappedEndomorphism
 
-    values = np.asarray(field)
+    values = _validate_real_finite(np.asarray(field), name="field", vector_size=2)
     if values.ndim != 3 or values.shape[-1] != 2:
         raise ValueError(f"field must have shape (height, width, 2), got {values.shape}")
-    if width <= 0 or height <= 0:
-        raise ValueError(f"width and height must be positive, got {(width, height)}")
-    result_dtype = values.dtype if dtype is None else dtype
+    width, height = _validate_resolution(width, height)
+    result_dtype = np.dtype(values.dtype if dtype is None else dtype)
+    _validate_float_dtype(result_dtype, name="dtype")
     endomorphism = Unit2DMappedEndomorphism(values, interp_method=interpolation, cache_size=0)
     ys, xs = np.meshgrid(
         np.linspace(0.0, 1.0, height), np.linspace(0.0, 1.0, width), indexing="ij"
